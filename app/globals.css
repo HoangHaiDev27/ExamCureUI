@@ -1,0 +1,214 @@
+@import "tailwindcss";
+
+/* ============================================================
+   THITHU — Design tokens
+   Nền tảng thi thử mô phỏng phần mềm thi của từng trường ĐH.
+   Cam FPT dùng tiết chế (~10% diện tích): chỉ CTA + điểm nhấn.
+   ============================================================ */
+
+@theme {
+  /* Brand accent (đổi sang xanh #078df8 — token vẫn giữ tên "orange") */
+  --color-orange: #078df8;
+  --color-orange-dark: #0670cc;
+  --color-orange-soft: #e6f2fe;
+  --color-orange-border: #a9d3fb;
+
+  /* Secondary / status */
+  --color-blue: #1d8dc9;
+  --color-blue-dark: #166ea0;
+  --color-blue-soft: #e8f4fb;
+  --color-green: #00a650;
+  --color-green-soft: #e4f6ec;
+  --color-warning: #f5a623;
+  --color-warning-soft: #fef3df;
+  --color-danger: #e5484d;
+  --color-danger-soft: #fdeaea;
+
+  /* Neutrals */
+  --color-ink: #1a1d21;
+  --color-ink-2: #5b6470;
+  --color-ink-3: #6b7480; /* darkened to meet WCAG AA (~4.7:1 on white) */
+  --color-line: #e4e7ec;
+  --color-line-strong: #d3d8e0;
+  --color-paper: #ffffff;
+  --color-paper-2: #f7f8fa;
+  --color-paper-3: #eef0f4;
+
+  /* Type */
+  --font-sans: var(--font-bvp), "Segoe UI", system-ui, sans-serif;
+  --font-display: var(--font-lora), Georgia, serif;
+  --font-mono: var(--font-mono-code), "SF Mono", ui-monospace, monospace;
+
+  /* Radius — consistent, small (6–8px) */
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  /* Shadow — single, very light tier. No multi-color glow. */
+  --shadow-1: 0 1px 2px rgba(26, 29, 33, 0.06), 0 1px 1px rgba(26, 29, 33, 0.04);
+  --shadow-2: 0 4px 14px rgba(26, 29, 33, 0.08), 0 1px 3px rgba(26, 29, 33, 0.05);
+  --shadow-pop: 0 10px 34px rgba(26, 29, 33, 0.14);
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background: var(--color-paper-2);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    font-feature-settings: "ss01", "cv01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2, h3, h4 {
+    line-height: 1.18;
+    letter-spacing: -0.012em;
+    text-wrap: balance;
+  }
+
+  ::selection {
+    background: var(--color-orange);
+    color: #fff;
+  }
+
+  /* Focus — visible, consistent across components */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--color-orange);
+    outline-offset: 2px;
+    border-radius: var(--radius);
+  }
+
+  /* Scrollbars — thin, neutral */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb {
+    background: var(--color-line-strong);
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 99px;
+  }
+  *::-webkit-scrollbar-thumb:hover { background: var(--color-ink-3); }
+}
+
+/* ============================================================
+   Utilities
+   ============================================================ */
+
+/* Subtle dotted backdrop for editorial sections — not glassmorphism */
+.bg-dotgrid {
+  background-image: radial-gradient(var(--color-line-strong) 1px, transparent 1px);
+  background-size: 22px 22px;
+  background-position: -1px -1px;
+}
+
+.bg-linegrid {
+  background-image:
+    linear-gradient(to right, rgba(228, 231, 236, 0.6) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(228, 231, 236, 0.6) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+/* Hairline divider that reads on paper-2 */
+.rule {
+  border: 0;
+  height: 1px;
+  background: var(--color-line);
+}
+
+/* School logo strip: grayscale until hover */
+.logo-grayscale {
+  filter: grayscale(1);
+  opacity: 0.55;
+  transition: filter 0.25s ease, opacity 0.25s ease;
+}
+.logo-grayscale:hover {
+  filter: grayscale(0);
+  opacity: 1;
+}
+
+/* Tabular numerals for clocks, scores, counters */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Ẩn thanh cuộn (dùng cho carousel cuộn ngang) */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* ============================================================
+   Animations — restrained, purposeful
+   ============================================================ */
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadein {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes pulse-danger {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.0); }
+  50% { box-shadow: 0 0 0 4px rgba(229, 72, 77, 0.18); }
+}
+@keyframes sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+.animate-rise {
+  animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-fadein {
+  animation: fadein 0.5s ease both;
+}
+.clock-danger {
+  animation: pulse-danger 1.4s ease-in-out infinite;
+}
+
+/* Marquee logo dải trường — trượt liên tục từ trái sang phải */
+@keyframes marquee-rtl {
+  from { transform: translateX(-50%); }
+  to { transform: translateX(0); }
+}
+.marquee {
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent);
+}
+.marquee__track {
+  display: flex;
+  width: max-content;
+  animation: marquee-rtl 40s linear infinite;
+}
+.marquee:hover .marquee__track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .marquee__track {
+    animation: none !important;
+    transform: none;
+  }
+}
