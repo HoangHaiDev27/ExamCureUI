@@ -7,9 +7,14 @@ import { useEffect, useState } from "react";
 const KEY = "examcure:auth";
 const EVENT = "examcure:auth-change";
 
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5010/api/v1";
+
 export interface AuthUser {
   name: string;
   email?: string;
+  token?: string;
+  refreshToken?: string;
+  role?: string;
 }
 
 export function getAuth(): AuthUser | null {
@@ -63,4 +68,62 @@ export function initials(name: string): string {
   const parts = name.trim().split(/\s+/);
   const pick = parts.slice(-2);
   return pick.map((w) => w.charAt(0).toUpperCase()).join("") || "U";
+}
+
+export async function loginAPI(email: string, password: string) {
+  const res = await fetch(`${API_BASE_URL}/Auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+  }
+  return await res.json();
+}
+
+export async function registerAPI(name: string, email: string, password: string) {
+  const res = await fetch(`${API_BASE_URL}/Auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ 
+      email, 
+      password, 
+      fullName: name,
+      mssv: "",
+      schoolId: ""
+    })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "Đăng ký thất bại. Email có thể đã tồn tại.");
+  }
+  return await res.json();
+}
+
+export async function googleLoginAPI(idToken: string) {
+  const res = await fetch(`${API_BASE_URL}/Auth/google-login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "Đăng nhập bằng Google thất bại.");
+  }
+  return await res.json();
+}
+
+export async function verifyOtpAPI(email: string, code: string) {
+  const res = await fetch(`${API_BASE_URL}/Auth/verify-otp`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code })
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || "Xác thực OTP thất bại.");
+  }
+  return await res.json();
 }

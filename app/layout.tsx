@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Be_Vietnam_Pro, Lora, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { Providers } from "@/components/auth/Providers";
 
 const beVietnam = Be_Vietnam_Pro({
   variable: "--font-bvp",
@@ -37,7 +38,9 @@ export default function RootLayout({
       lang="vi"
       className={`${beVietnam.variable} ${lora.variable} ${jetbrains.variable} h-full`}
     >
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

@@ -7,6 +7,7 @@ import { Check } from "lucide-react";
 import { SocialAuth } from "./SocialAuth";
 import { Captcha } from "./Captcha";
 import { TextField, PasswordField, SubmitButton } from "./Fields";
+import { registerAPI } from "@/lib/auth";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -25,7 +26,9 @@ export function RegisterForm() {
     captcha?: boolean;
   }>({});
 
-  function submit(e: React.FormEvent) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const er: typeof errors = {};
     if (name.trim().length < 2) er.name = "Vui lòng nhập họ tên";
@@ -35,8 +38,17 @@ export function RegisterForm() {
     if (!agree) er.agree = true;
     if (!captcha) er.captcha = true;
     setErrors(er);
-    if (Object.keys(er).length === 0)
-      router.push(`/xac-thuc-otp?email=${encodeURIComponent(email)}`);
+    if (Object.keys(er).length === 0) {
+      setIsSubmitting(true);
+      try {
+        await registerAPI(name, email, password);
+        router.push(`/xac-thuc-otp?email=${encodeURIComponent(email)}`);
+      } catch (error: any) {
+        setErrors({ ...er, email: error.message });
+      } finally {
+        setIsSubmitting(false);
+      }
+    }
   }
 
   return (
@@ -105,7 +117,7 @@ export function RegisterForm() {
         </div>
 
         <Captcha checked={captcha} onChange={setCaptcha} error={errors.captcha} />
-        <SubmitButton>Tạo tài khoản</SubmitButton>
+        <SubmitButton disabled={isSubmitting}>{isSubmitting ? "Đang tạo..." : "Tạo tài khoản"}</SubmitButton>
       </div>
     </form>
   );

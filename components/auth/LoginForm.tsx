@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { SocialAuth } from "./SocialAuth";
 import { Captcha } from "./Captcha";
 import { TextField, PasswordField, SubmitButton } from "./Fields";
-import { login } from "@/lib/auth";
+import { login, loginAPI } from "@/lib/auth";
 import { STUDENT } from "@/lib/student";
 
 export function LoginForm() {
@@ -14,9 +14,15 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [captcha, setCaptcha] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string; captcha?: boolean }>({});
+  const [errors, setErrors] = useState<{
+    email?: string;
+    password?: string;
+    captcha?: boolean;
+  }>({});
 
-  function submit(e: React.FormEvent) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     const er: typeof errors = {};
     if (!/^\S+@\S+\.\S+$/.test(email)) er.email = "Email không hợp lệ";
@@ -24,8 +30,22 @@ export function LoginForm() {
     if (!captcha) er.captcha = true;
     setErrors(er);
     if (Object.keys(er).length === 0) {
-      login({ name: STUDENT.name, email });
-      router.push("/dashboard");
+      setIsSubmitting(true);
+      try {
+        const data = await loginAPI(email, password);
+        login({
+          name: data.fullName || data.email || STUDENT.name,
+          email: data.email || email,
+          token: data.token,
+          refreshToken: data.refreshToken,
+          role: data.role,
+        });
+        router.push("/");
+      } catch (error: any) {
+        setErrors({ ...er, password: error.message });
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   }
 
@@ -51,13 +71,22 @@ export function LoginForm() {
           placeholder="Nhập mật khẩu"
           error={errors.password}
           rightSlot={
-            <Link href="/quen-mat-khau" className="text-[13px] font-medium text-ink-2 transition-colors hover:text-orange">
+            <Link
+              href="/quen-mat-khau"
+              className="text-[13px] font-medium text-ink-2 transition-colors hover:text-orange"
+            >
               Quên mật khẩu?
             </Link>
           }
         />
-        <Captcha checked={captcha} onChange={setCaptcha} error={errors.captcha} />
-        <SubmitButton>Đăng nhập bằng mật khẩu</SubmitButton>
+        <Captcha
+          checked={captcha}
+          onChange={setCaptcha}
+          error={errors.captcha}
+        />
+        <SubmitButton disabled={isSubmitting}>
+          {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập bằng mật khẩu"}
+        </SubmitButton>
       </div>
     </form>
   );

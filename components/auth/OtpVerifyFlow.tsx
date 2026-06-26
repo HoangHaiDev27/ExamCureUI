@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
 import { AuthHeading } from "./AuthShell";
 import { OtpInput } from "./OtpInput";
+import { verifyOtpAPI, login as localLogin } from "@/lib/auth";
 
 export function OtpVerifyFlow({ email }: { email: string }) {
   const router = useRouter();
@@ -21,17 +22,29 @@ export function OtpVerifyFlow({ email }: { email: string }) {
     return () => clearInterval(id);
   }, [resendIn]);
 
-  function verify() {
+  async function verify() {
     if (code.length !== 6) {
       setError("Vui lòng nhập đủ 6 chữ số");
       return;
     }
     setError(null);
     setVerifying(true);
-    window.setTimeout(() => {
-      setVerifying(false);
+    
+    try {
+      const data = await verifyOtpAPI(email, code);
+      localLogin({
+        name: data.fullName || data.email,
+        email: data.email,
+        token: data.token,
+        refreshToken: data.refreshToken,
+        role: data.role
+      });
       setDone(true);
-    }, 650);
+    } catch (err: any) {
+      setError(err.message || "Mã OTP không hợp lệ.");
+    } finally {
+      setVerifying(false);
+    }
   }
 
   if (done) {
