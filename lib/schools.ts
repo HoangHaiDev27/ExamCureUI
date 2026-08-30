@@ -14,8 +14,8 @@ export const SCHOOLS: School[] = [
     region: "Miền Bắc",
     field: "Công nghệ",
     popular: true,
-    subjectCount: 64,
-    examCount: 412,
+    subjectCount: 34,
+    examCount: 272,
     learnersK: 38,
     theme: {
       brand: "#f37021",

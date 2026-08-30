@@ -13,26 +13,36 @@ export function Logo({
   href?: string | null;
   mono?: boolean;
 }) {
-  const img = (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src="/Logo.svg"
-      alt="ExamCure"
-      style={{ height: size, width: "auto" }}
-      className={`block max-w-none select-none${
-        mono ? " [filter:brightness(0)_invert(1)]" : ""
-      }`}
-    />
+  let textClass = "text-[23px]";
+  if (size >= 80) {
+    textClass = "text-[30px]";
+  } else if (size >= 28) {
+    textClass = "text-[26px]";
+  } else if (size >= 24) {
+    textClass = "text-[21.5px]";
+  }
+
+  const logoText = (
+    <span className={`inline-flex items-baseline tracking-tight select-none ${textClass} transition-colors`}>
+      <span className={mono ? "font-sans font-semibold text-white" : "font-sans font-semibold text-slate-800"}>
+        Exam
+      </span>
+      <span className={`font-display font-bold italic ml-0.5 ${
+        mono ? "text-white/90" : "text-orange"
+      }`}>
+        Cure
+      </span>
+    </span>
   );
 
-  if (href === null) return img;
+  if (href === null) return logoText;
   return (
     <Link
       href={href}
       aria-label="ExamCure — trang chủ"
       className="inline-flex items-center"
     >
-      {img}
+      {logoText}
     </Link>
   );
 }

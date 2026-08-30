@@ -6,20 +6,18 @@ import { type ChatMessage, readUserChat, saveUserChat } from "@/lib/feed";
 import { STUDENT } from "@/lib/student";
 import { Avatar } from "./Avatar";
 
-export function ChatChannel({ seed }: { seed: ChatMessage[] }) {
+export function ChatChannel({ seed, schoolId }: { seed: ChatMessage[]; schoolId: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>(seed);
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Tin nhắn người dùng đã gửi trong phiên
   useEffect(() => {
-    const mine = readUserChat();
-    if (mine.length) {
-      setTimeout(() => {
-        setMessages([...seed, ...mine]);
-      }, 0);
-    }
-  }, [seed]);
+    const mine = readUserChat().filter((m) => m.schoolId === schoolId);
+    setTimeout(() => {
+      setMessages([...seed, ...mine]);
+    }, 0);
+  }, [seed, schoolId]);
 
   // Cuộn xuống cuối khi có tin mới (chỉ trong khung chat)
   useEffect(() => {
@@ -40,6 +38,7 @@ export function ChatChannel({ seed }: { seed: ChatMessage[] }) {
       author: STUDENT.name,
       time,
       text,
+      schoolId,
     };
     setMessages((prev) => [...prev, msg]);
     saveUserChat(msg);

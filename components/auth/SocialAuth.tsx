@@ -27,8 +27,9 @@ export function SocialAuth({ verb = "Đăng nhập" }: { verb?: string }) {
           });
           router.push("/dashboard");
         }
-      } catch (err: any) {
-        setError(err.message || "Đăng nhập bằng Google thất bại.");
+      } catch (err) {
+        const error = err as Error;
+        setError(error.message || "Đăng nhập bằng Google thất bại.");
       }
     },
     onError: () => {

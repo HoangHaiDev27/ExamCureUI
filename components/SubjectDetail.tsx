@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 import {
   BookOpen,
   ChevronRight,
@@ -47,6 +52,16 @@ export function SubjectDetail({
   materials: Material[];
   examSets: ExamSet[];
 }) {
+  const user = useAuth();
+  const router = useRouter();
+
+  // Redirect if logged-in user belongs to another school
+  useEffect(() => {
+    if (user && user.schoolId && user.schoolId !== school.id) {
+      router.replace(`/schools/${user.schoolId}/subjects/${user.schoolId}-${subject.code.toLowerCase()}`);
+    }
+  }, [user, school.id, subject.code, router]);
+
   const grade = subject.lastScore != null ? classify(subject.lastScore) : null;
   const firstExamHref = `/exam/${school.id}/${subject.id}`;
 

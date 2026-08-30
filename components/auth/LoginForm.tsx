@@ -39,10 +39,12 @@ export function LoginForm() {
           token: data.token,
           refreshToken: data.refreshToken,
           role: data.role,
+          schoolId: data.schoolId || "fptu",
         });
         router.push("/");
-      } catch (error: any) {
-        setErrors({ ...er, password: error.message });
+      } catch (error) {
+        const err = error as Error;
+        setErrors({ ...er, password: err.message });
       } finally {
         setIsSubmitting(false);
       }

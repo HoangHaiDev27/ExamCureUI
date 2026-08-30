@@ -15,6 +15,7 @@ import {
   LogOut,
   Send,
   X,
+  Check,
 } from "lucide-react";
 import type { Question, School, Subject } from "@/lib/types";
 import { SchoolMark } from "@/components/SchoolMark";
@@ -52,6 +53,8 @@ export function ExamRoom({
   const [timeLeft, setTimeLeft] = useState(durationSec);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [isLocked, setIsLocked] = useState(false);
+  const [finishChecked, setFinishChecked] = useState(false);
   const submittedRef = useRef(false);
 
   const answeredCount = answers.filter((a) => a >= 0).length;
@@ -78,7 +81,12 @@ export function ExamRoom({
     } catch {
       /* ignore storage errors */
     }
-    router.push(`/exam/${school.id}/${subject.id}/result`);
+    
+    if (school.id === "fptu") {
+      setIsLocked(true);
+    } else {
+      router.push(`/exam/${school.id}/${subject.id}/result`);
+    }
   }, [answers, flagged, durationSec, timeLeft, school.id, subject.id, router]);
 
   // Countdown
@@ -91,7 +99,11 @@ export function ExamRoom({
 
   // Auto-submit when time runs out
   useEffect(() => {
-    if (timeLeft === 0) finish();
+    if (timeLeft === 0) {
+      setTimeout(() => {
+        finish();
+      }, 0);
+    }
   }, [timeLeft, finish]);
 
   const select = (qi: number, oi: number) =>
@@ -117,8 +129,8 @@ export function ExamRoom({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (submitOpen) return;
-      if (e.key === "ArrowLeft") go(current - 1);
-      else if (e.key === "ArrowRight") go(current + 1);
+      if (e.key === "ArrowLeft" || e.key === "PageUp") go(current - 1);
+      else if (e.key === "ArrowRight" || e.key === "PageDown") go(current + 1);
       else {
         const k = e.key.toUpperCase();
         const idx = LETTERS.indexOf(k);
@@ -136,8 +148,269 @@ export function ExamRoom({
 
   const q = questions[current];
 
+  if (isLocked) {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center bg-[#2b3542] text-white p-6 font-mono">
+        <div className="w-full max-w-md rounded-lg border-2 border-slate-700 bg-[#1e2530] p-6 shadow-2xl text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green/10 text-green mb-4 border border-green">
+            <Check size={28} strokeWidth={3} />
+          </div>
+          <h1 className="text-xl font-bold text-[#25a26a] tracking-wider uppercase">Finish successfully!</h1>
+          <div className="my-5 border-y border-slate-700 py-4 text-left space-y-2 text-slate-300 text-sm font-sans">
+            <p><strong>Thí sinh:</strong> {STUDENT.name}</p>
+            <p><strong>MSSV:</strong> {mssv}</p>
+            <p><strong>Học phần:</strong> {subject.name} ({subject.code})</p>
+            <p><strong>Số câu đã trả lời:</strong> {answeredCount}/{total}</p>
+            <p><strong>Mã đề thi:</strong> {examCode}</p>
+          </div>
+          <p className="text-xs text-slate-400 mb-6 font-sans leading-relaxed">
+            Bài thi của bạn đã được nộp thành công trên hệ thống EOS. Vui lòng giữ nguyên màn hình và báo cho giám thị phòng thi.
+          </p>
+          <button
+            onClick={() => {
+              router.push(`/exam/${school.id}/${subject.id}/result`);
+            }}
+            className="w-full h-11 rounded-md bg-[#d85f18] text-[14px] font-bold uppercase tracking-wider text-white transition-all hover:bg-orange-dark shadow-md"
+          >
+            Exit
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (school.id === "fptu") {
+    return (
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f0f0f0] text-black font-sans select-none p-2 border border-slate-350">
+        
+        {/* TOP EOS HEADER */}
+        <div className="flex flex-none items-start justify-between bg-[#f0f0f0] p-3 border border-slate-300 rounded shadow-sm gap-4 mb-2">
+          {/* Info grid (Left column) */}
+          <div className="grid grid-cols-3 gap-x-8 gap-y-1.5 text-[12.5px] leading-tight text-slate-800 font-mono">
+            <div>
+              <span className="text-slate-500">Machine:</span> <span className="font-semibold text-slate-900">DESKTOP-G3FCS4L</span>
+            </div>
+            <div>
+              <span className="text-slate-500">Duration:</span> <span className="font-semibold text-slate-900">{subject.durationMin} minutes</span>
+            </div>
+            <div>
+              <span className="text-slate-500">Q mark:</span> <span className="font-bold text-[#0000ff]">1</span>
+            </div>
+
+            <div>
+              <span className="text-slate-500">Student:</span> <span className="font-bold text-[#0000ff]">{mssv}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-slate-500">Open Code:</span> 
+              <input type="text" disabled className="w-14 h-4.5 border border-slate-300 bg-slate-100 rounded px-1 text-[10px]" />
+              <button disabled className="h-4.5 border border-slate-400 bg-slate-200 text-slate-400 px-1 text-[10px] rounded">Show Question</button>
+            </div>
+            <div>
+              <span className="text-slate-500">Total Marks:</span> <span className="font-bold text-[#0000ff]">{total}</span>
+            </div>
+
+            <div>
+              <span className="text-slate-500">Server:</span> <span className="font-semibold text-slate-900">Eng_EOS_14032</span>
+            </div>
+            <div>
+              <span className="text-slate-500">Exam Code:</span> <span className="font-bold text-[#0000ff]">{examCode}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-[10px]">
+              <span className="text-slate-500">Vol:</span> 
+              <select disabled className="border border-slate-300 bg-white h-4.5 text-[9px] rounded px-0.5"><option>8</option></select>
+              <span className="text-slate-500">Font:</span> 
+              <select disabled className="border border-slate-300 bg-white h-4.5 text-[9px] rounded px-0.5"><option>Microsoft Sans Serif</option></select>
+              <span className="text-slate-500">Size:</span> 
+              <select disabled className="border border-slate-300 bg-white h-4.5 text-[9px] rounded px-0.5"><option>10</option></select>
+            </div>
+          </div>
+
+          {/* TIMER IN THE MIDDLE */}
+          <div className="flex items-center gap-3.5 bg-white border border-slate-300 rounded px-6 py-1.5 shadow-inner">
+            <span className="text-[13px] font-bold text-slate-500 font-mono">Time Left:</span>
+            <span className="text-[40px] font-bold leading-none text-[#0000ff] font-mono tracking-tight min-w-[110px] text-center">
+              {fmt(timeLeft)}
+            </span>
+            {/* Vietnam Flag */}
+            <div className="relative w-[60px] h-[36px] bg-[#da251d] flex items-center justify-center border border-[#a01a14] rounded shadow-sm">
+              <svg className="w-5 h-5 text-[#ffff00] fill-current" viewBox="0 0 24 24">
+                <path d="M12 .587l3.668 7.431 8.2 1.192-5.934 5.787 1.4 8.168L12 18.896l-7.334 3.857 1.4-8.168L.132 9.21l8.2-1.192z"/>
+              </svg>
+            </div>
+          </div>
+
+          {/* FINISH CHECKBOX & BUTTON (TOP RIGHT) */}
+          <div className="flex flex-col items-end justify-center bg-white/40 border border-slate-300 rounded p-2.5 gap-2 min-w-[180px]">
+            <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={finishChecked} 
+                onChange={(e) => setFinishChecked(e.target.checked)}
+                className="w-4 h-4 rounded text-orange focus:ring-orange cursor-pointer border-slate-300"
+              />
+              <span className="font-mono">I want to finish the exam.</span>
+            </label>
+            <button
+              onClick={() => {
+                if (finishChecked) setSubmitOpen(true);
+              }}
+              className={`h-7 w-20 border text-[11px] font-bold uppercase rounded shadow transition-all ${
+                finishChecked 
+                  ? "bg-[#ffff99] hover:bg-[#ffff66] text-black border-slate-400 active:scale-95 cursor-pointer" 
+                  : "bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed"
+              }`}
+            >
+              Finish
+            </button>
+          </div>
+        </div>
+
+        {/* TAB STRIP */}
+        <div className="flex flex-none items-end border-b border-slate-300 px-2 mt-1">
+          <div className="bg-white border-x border-t border-slate-300 rounded-t px-4 py-1.5 text-[12.5px] font-bold text-slate-800 shadow-sm relative -bottom-px font-mono">
+            Multiple Choices
+          </div>
+        </div>
+
+        {/* MAIN CONTAINER */}
+        <div className="flex-1 min-h-0 flex bg-white border border-slate-300 rounded-b shadow-inner p-3 gap-3">
+          
+          {/* Question selection box */}
+          <div className="w-[140px] flex-none flex flex-col border border-slate-300 rounded bg-[#fcfcfc] p-3 shadow-sm">
+            <span className="text-[12.5px] font-bold text-[#0000ff] uppercase tracking-wider mb-3 font-mono">Answer</span>
+            
+            {/* Options Checkboxes */}
+            <div className="flex-1 space-y-3.5">
+              {q.options.map((_, oi) => {
+                const selected = answers[current] === oi;
+                return (
+                  <button
+                    key={oi}
+                    onClick={() => select(current, oi)}
+                    className="flex items-center gap-3 w-full text-left py-1 hover:bg-slate-50 rounded px-1 cursor-pointer transition-colors group"
+                  >
+                    <span className={`w-4.5 h-4.5 border rounded flex items-center justify-center transition-all ${
+                      selected 
+                        ? "border-[#0000ff] bg-[#0000ff]/10 text-[#0000ff]" 
+                        : "border-slate-400 bg-white group-hover:border-slate-500"
+                    }`}>
+                      {selected && <div className="w-2.5 h-2.5 bg-[#0000ff] rounded-[1px]" />}
+                    </span>
+                    <span className="text-[13px] font-bold text-slate-700 font-mono">{LETTERS[oi]}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Next Button */}
+            <button
+              onClick={() => go(current + 1)}
+              disabled={current === total - 1}
+              className="mt-auto h-8 w-full border border-slate-400 bg-slate-100 hover:bg-slate-200 text-slate-800 text-[12px] font-bold rounded shadow transition-all active:scale-[0.98] disabled:opacity-40 disabled:hover:bg-slate-100 disabled:active:scale-100 font-mono"
+            >
+              Next
+            </button>
+          </div>
+
+          {/* Question prompt and details */}
+          <div className="flex-1 flex flex-col border border-slate-300 rounded bg-white p-5 shadow-sm overflow-y-auto">
+            <span className="text-[13.5px] font-bold text-slate-700 border-b border-slate-150 pb-2 mb-3 font-mono">
+              Multiple choices {current + 1}/{total}
+            </span>
+            <p className="text-[12px] italic text-slate-400 mb-2 font-mono">(Choose 1 answer)</p>
+            
+            {/* Prompt text */}
+            <p className="text-[15.5px] font-medium leading-relaxed text-slate-800 mb-4 whitespace-pre-wrap font-sans">
+              {q.prompt}
+            </p>
+
+            {q.code && (
+              <pre className="mb-4 overflow-x-auto rounded border border-slate-200 bg-[#f8f9fa] p-3 font-mono text-[12.5px] leading-relaxed text-slate-700">
+                <code>{q.code}</code>
+              </pre>
+            )}
+
+            {/* Listed options text */}
+            <div className="space-y-2.5 border-t border-slate-100 pt-4 mt-2 font-sans">
+              {q.options.map((opt, oi) => (
+                <div key={oi} className="text-[14.5px] text-slate-700 leading-relaxed pl-1 flex items-start gap-1">
+                  <span className="font-bold text-slate-900 shrink-0 font-mono">{LETTERS[oi]}.</span>
+                  <span className="whitespace-pre-wrap">{opt}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* BOTTOM QUESTION GRID BAR */}
+        <div className="flex flex-none items-center justify-between bg-[#f0f0f0] p-3 border border-slate-300 rounded shadow-sm gap-4 mt-2">
+          {/* Numbers list 1 -> 24 */}
+          <div className="flex flex-wrap items-center gap-1 max-w-[80%]">
+            {Array.from({ length: total }).map((_, i) => {
+              const isCurrent = i === current;
+              const answered = answers[i] >= 0;
+              return (
+                <button
+                  key={i}
+                  onClick={() => go(i)}
+                  className={`tnum w-7.5 h-7.5 border flex items-center justify-center text-[12.5px] font-bold font-mono rounded cursor-pointer transition-all ${
+                    isCurrent
+                      ? "border-[#0000ff] bg-[#0000ff]/10 text-[#0000ff] ring-2 ring-[#0000ff]/20 font-black scale-105"
+                      : answered
+                        ? "border-[#1e6b43] bg-[#22c55e] text-white hover:opacity-90"
+                        : "border-slate-300 bg-[#e0e0e0] text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* FINISH CHECKBOX & BUTTON (BOTTOM RIGHT) */}
+          <div className="flex items-center gap-3.5 bg-white/40 border border-slate-300 rounded px-3 py-1.5">
+            <label className="flex items-center gap-1.5 text-[12px] font-medium text-slate-700 cursor-pointer font-mono">
+              <input 
+                type="checkbox" 
+                checked={finishChecked} 
+                onChange={(e) => setFinishChecked(e.target.checked)}
+                className="w-4 h-4 rounded text-orange focus:ring-orange cursor-pointer border-slate-300"
+              />
+              <span>I want to finish the exam.</span>
+            </label>
+            <button
+              onClick={() => {
+                if (finishChecked) setSubmitOpen(true);
+              }}
+              className={`h-7 w-20 border text-[11px] font-bold uppercase rounded shadow transition-all ${
+                finishChecked 
+                  ? "bg-[#ffff99] hover:bg-[#ffff66] text-black border-slate-400 active:scale-95 cursor-pointer" 
+                  : "bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed"
+              }`}
+            >
+              Finish
+            </button>
+          </div>
+        </div>
+
+        {submitOpen && (
+          <SubmitModal
+            total={total}
+            answeredCount={answeredCount}
+            flaggedCount={flaggedCount}
+            timeLeft={timeLeft}
+            theme={theme}
+            onClose={() => setSubmitOpen(false)}
+            onConfirm={finish}
+            schoolId={school.id}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-[100dvh] flex-col overflow-hidden bg-paper-2 text-ink">
+    <div className={`flex h-[100dvh] flex-col overflow-hidden text-ink ${school.id === "fptu" ? "bg-[#f0f2f5]" : "bg-paper-2"}`}>
       <ExamHeader
         school={school}
         subject={subject}
@@ -262,7 +535,7 @@ export function ExamRoom({
               {current === total - 1 ? (
                 <button
                   onClick={() => setSubmitOpen(true)}
-                  className="inline-flex h-11 items-center gap-1.5 rounded-[7px] px-4 text-[14px] font-medium text-white transition-[filter]"
+                  className="inline-flex h-11 items-center gap-1.5 rounded-[7px] px-4 text-[14px] font-medium text-white transition-[filter] hover:brightness-105"
                   style={{ background: theme.brand }}
                 >
                   <Send size={16} /> Nộp bài
@@ -293,6 +566,7 @@ export function ExamRoom({
             onJump={(i) => go(i)}
             onSubmit={() => setSubmitOpen(true)}
             examCode={examCode}
+            schoolId={school.id}
           />
         </aside>
       </div>
@@ -360,6 +634,7 @@ export function ExamRoom({
                 setSubmitOpen(true);
               }}
               examCode={examCode}
+              schoolId={school.id}
             />
           </div>
         </div>
@@ -374,6 +649,7 @@ export function ExamRoom({
           theme={theme}
           onClose={() => setSubmitOpen(false)}
           onConfirm={finish}
+          schoolId={school.id}
         />
       )}
     </div>
@@ -529,6 +805,41 @@ function ExamHeader({
     );
   }
 
+  // ---- FPTU EOS CUSTOM HEADER ----
+  if (school.id === "fptu") {
+    return (
+      <header className="flex-none bg-[#2b3542] text-white border-b border-[#1a222d] shadow-md font-sans">
+        <div className="flex h-[64px] items-center justify-between px-4 sm:px-6">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center justify-center rounded bg-orange px-2.5 py-1 text-[13px] font-bold tracking-wider text-white">
+              EOS CLIENT
+            </div>
+            <div className="hidden border-l border-white/20 pl-4 lg:block">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-medium">Học phần</span>
+              <span className="text-[13.5px] font-semibold block text-slate-100">{subject.name} ({subject.code})</span>
+            </div>
+            <div className="hidden border-l border-white/20 pl-4 sm:block">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-medium">Mã đề</span>
+              <span className="tnum text-[13.5px] font-mono font-bold text-orange block">{examCode}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-5">
+            <div className="border-r border-white/20 pr-4 text-right hidden md:block">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-medium">Thí sinh</span>
+              <span className="text-[13.5px] font-semibold block text-slate-100">{STUDENT.name} ({mssv})</span>
+            </div>
+            <div className="text-right">
+              <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-medium">Thời gian còn lại</span>
+              <Clock timeLeft={timeLeft} danger={danger} variant="dark" />
+            </div>
+            {exitBtn(false)}
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   // ---- CLASSIC: single solid brand bar (FPT-style EOS) ----
   return (
     <header
@@ -582,6 +893,7 @@ function Navigator({
   onJump,
   onSubmit,
   examCode,
+  schoolId,
 }: {
   questions: Question[];
   total: number;
@@ -594,9 +906,75 @@ function Navigator({
   onJump: (i: number) => void;
   onSubmit: () => void;
   examCode: string;
+  schoolId: string;
 }) {
   const pct = Math.round((answeredCount / total) * 100);
   const [view, setView] = useState<"list" | "grid">("list");
+
+  if (schoolId === "fptu") {
+    return (
+      <div className="flex h-full flex-col bg-[#f8f9fa] border-l border-slate-200 font-sans">
+        <div className="border-b border-slate-200 bg-white px-5 py-4">
+          <h2 className="text-[13.5px] font-bold text-slate-700 uppercase tracking-wider">Answer Sheet</h2>
+          <div className="mt-2 flex items-center justify-between text-[12px] text-slate-500 font-mono">
+            <span>Mã đề: <b className="text-orange">{examCode}</b></span>
+            <span>Đã làm: <b className="text-slate-800">{answeredCount}/{total}</b></span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+            <div
+              className="h-full rounded-full bg-[#25a26a] transition-[width] duration-300"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-2 gap-2">
+            {Array.from({ length: total }).map((_, i) => {
+              const isCurrent = i === current;
+              const ansIndex = answers[i];
+              const answered = ansIndex >= 0;
+              const label = answered ? LETTERS[ansIndex] : "--";
+
+              return (
+                <button
+                  key={i}
+                  onClick={() => onJump(i)}
+                  className={`flex items-center justify-between rounded-md border px-3 py-2 text-[13px] font-medium transition-all ${
+                    isCurrent
+                      ? "border-orange bg-orange/5 text-orange-dark shadow-sm ring-1 ring-orange"
+                      : answered
+                        ? "border-[#cce8db] bg-[#eefcf6] text-[#1b6b3a]"
+                        : "border-slate-200 bg-white text-slate-400 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-mono font-semibold">Q{(i + 1).toString().padStart(2, "0")}</span>
+                  <span className={`w-6 h-6 rounded flex items-center justify-center font-bold font-mono text-[13px] ${
+                    isCurrent
+                      ? "bg-orange text-white"
+                      : answered
+                        ? "bg-[#25a26a] text-white"
+                        : "bg-slate-100 text-slate-400"
+                  }`}>
+                    {label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="border-t border-slate-200 bg-white px-5 py-4">
+          <button
+            onClick={onSubmit}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#d85f18] text-[14px] font-bold uppercase tracking-wider text-white transition-all hover:bg-orange-dark shadow-md"
+          >
+            I want to finish the exam
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -820,6 +1198,7 @@ function SubmitModal({
   theme,
   onClose,
   onConfirm,
+  schoolId,
 }: {
   total: number;
   answeredCount: number;
@@ -828,19 +1207,24 @@ function SubmitModal({
   theme: School["theme"];
   onClose: () => void;
   onConfirm: () => void;
+  schoolId?: string;
 }) {
   const unanswered = total - answeredCount;
+  const isFPTU = schoolId === "fptu";
+
   return (
     <div
       className="fixed inset-0 z-[60] grid place-items-center bg-ink/45 p-4 animate-fadein"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md overflow-hidden rounded-[10px] bg-paper shadow-[var(--shadow-pop)]"
+        className="w-full max-w-md overflow-hidden rounded-[10px] bg-paper shadow-[var(--shadow-pop)] font-sans"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="text-[17px] font-semibold">Xác nhận nộp bài</h2>
+          <h2 className="text-[15px] font-bold text-slate-800 uppercase tracking-wider">
+            {isFPTU ? "Confirm Finish Exam" : "Xác nhận nộp bài"}
+          </h2>
           <button onClick={onClose} className="grid h-8 w-8 place-items-center rounded-full text-ink-3 hover:bg-paper-3">
             <X size={17} />
           </button>
@@ -848,33 +1232,45 @@ function SubmitModal({
 
         <div className="px-5 py-5">
           <div className="grid grid-cols-3 divide-x divide-line rounded-[8px] border border-line">
-            <Stat label="Tổng câu" value={total} />
-            <Stat label="Đã làm" value={answeredCount} tone="green" />
-            <Stat label="Chưa làm" value={unanswered} tone={unanswered > 0 ? "danger" : "muted"} />
+            <Stat label={isFPTU ? "Total Q" : "Tổng câu"} value={total} />
+            <Stat label={isFPTU ? "Answered" : "Đã làm"} value={answeredCount} tone="green" />
+            <Stat label={isFPTU ? "Unanswered" : "Chưa làm"} value={unanswered} tone={unanswered > 0 ? "danger" : "muted"} />
           </div>
 
           {unanswered > 0 ? (
             <div className="mt-4 flex items-start gap-2.5 rounded-[7px] border border-warning bg-warning-soft px-3.5 py-3 text-[13.5px] text-[#7a5304]">
               <AlertTriangle size={17} className="mt-0.5 shrink-0" />
-              <p>
-                Bạn còn <b className="tnum">{unanswered} câu chưa làm</b>
-                {flaggedCount > 0 && (
-                  <>
-                    {" "}và <b className="tnum">{flaggedCount} câu đã đánh dấu</b> xem lại
-                  </>
+              <div className="font-sans leading-relaxed">
+                {isFPTU ? (
+                  <p>
+                    You have <b className="tnum">{unanswered} unanswered question(s)</b>. 
+                    Are you sure you want to finish the exam? Once submitted, you cannot change your answers.
+                  </p>
+                ) : (
+                  <p>
+                    Bạn còn <b className="tnum">{unanswered} câu chưa làm</b>
+                    {flaggedCount > 0 && (
+                      <>
+                        {" "}và <b className="tnum">{flaggedCount} câu đã đánh dấu</b> xem lại
+                      </>
+                    )}
+                    . Sau khi nộp, bạn không thể chỉnh sửa bài làm.
+                  </p>
                 )}
-                . Sau khi nộp, bạn không thể chỉnh sửa bài làm.
-              </p>
+              </div>
             </div>
           ) : (
-            <p className="mt-4 text-[13.5px] text-ink-2">
-              Bạn đã hoàn thành tất cả các câu hỏi. Sau khi nộp, bài làm sẽ được
-              chấm và không thể chỉnh sửa.
+            <p className="mt-4 text-[13.5px] text-ink-2 font-sans leading-relaxed">
+              {isFPTU ? (
+                "You have answered all questions. Are you sure you want to finish the exam? Once submitted, you cannot change your answers."
+              ) : (
+                "Bạn đã hoàn thành tất cả các câu hỏi. Sau khi nộp, bài làm sẽ được chấm và không thể chỉnh sửa."
+              )}
             </p>
           )}
 
-          <p className="mt-4 flex items-center gap-2 text-[13px] text-ink-3">
-            <Clock3 size={15} /> Thời gian còn lại:{" "}
+          <p className="mt-4 flex items-center gap-2 text-[13px] text-ink-3 font-sans">
+            <Clock3 size={15} /> {isFPTU ? "Time remaining:" : "Thời gian còn lại:"}{" "}
             <span className="tnum font-medium text-ink">{fmt(timeLeft)}</span>
           </p>
         </div>
@@ -882,16 +1278,16 @@ function SubmitModal({
         <div className="flex gap-3 border-t border-line bg-paper-2 px-5 py-4">
           <button
             onClick={onClose}
-            className="h-11 flex-1 rounded-[7px] border border-line-strong bg-paper text-[15px] font-medium text-ink transition-colors hover:bg-paper-3"
+            className="h-11 flex-1 rounded-[7px] border border-line-strong bg-paper text-[13.5px] font-bold text-slate-700 uppercase tracking-wider transition-colors hover:bg-paper-3"
           >
-            Tiếp tục làm bài
+            {isFPTU ? "Cancel" : "Tiếp tục làm bài"}
           </button>
           <button
             onClick={onConfirm}
-            className="h-11 flex-1 rounded-[7px] text-[15px] font-medium text-white transition-[filter] hover:brightness-105"
-            style={{ background: theme.brand }}
+            className="h-11 flex-1 rounded-[7px] text-[13.5px] font-bold text-white uppercase tracking-wider transition-[filter] hover:brightness-105"
+            style={{ background: isFPTU ? "#d85f18" : theme.brand }}
           >
-            Nộp bài
+            {isFPTU ? "Submit" : "Nộp bài"}
           </button>
         </div>
       </div>

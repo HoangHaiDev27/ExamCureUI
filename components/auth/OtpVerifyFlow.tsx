@@ -40,8 +40,9 @@ export function OtpVerifyFlow({ email }: { email: string }) {
         role: data.role
       });
       setDone(true);
-    } catch (err: any) {
-      setError(err.message || "Mã OTP không hợp lệ.");
+    } catch (err) {
+      const error = err as Error;
+      setError(error.message || "Mã OTP không hợp lệ.");
     } finally {
       setVerifying(false);
     }

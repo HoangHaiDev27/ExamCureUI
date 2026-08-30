@@ -8,16 +8,18 @@ import { Logo } from "./Logo";
 import { ButtonLink } from "./Button";
 import { useAuth, logout, initials, type AuthUser } from "@/lib/auth";
 
-const NAV = [
-  { href: "/schools", label: "Chọn trường" },
-  { href: "/schools?view=subjects", label: "Theo môn học" },
-  { href: "/dien-dan", label: "Diễn đàn" },
-];
-
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const user = useAuth();
+
+  const schoolId = user?.schoolId || "fptu";
+  const schoolLabel = schoolId === "fptu" ? "FPTU" : schoolId.toUpperCase();
+
+  const navItems = [
+    { href: `/schools/${schoolId}/subjects`, label: `Luyện thi ${schoolLabel}` },
+    { href: "/dien-dan", label: "Diễn đàn" },
+  ];
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-paper/90 backdrop-blur-[6px]">
@@ -29,7 +31,7 @@ export function SiteHeader() {
 
         {/* Center: nav */}
         <nav className="hidden items-center gap-1 lg:flex">
-          {NAV.map((item) => {
+          {navItems.map((item) => {
             const active = pathname === item.href.split("?")[0];
             return (
               <Link
@@ -58,7 +60,7 @@ export function SiteHeader() {
               <ButtonLink href="/dang-nhap" variant="outline" size="sm">
                 Đăng nhập
               </ButtonLink>
-              <ButtonLink href="/schools" variant="primary" size="sm">
+              <ButtonLink href={`/schools/${schoolId}/subjects`} variant="primary" size="sm">
                 Thi thử ngay
               </ButtonLink>
             </div>
@@ -77,7 +79,7 @@ export function SiteHeader() {
       {open && (
         <div className="border-t border-line bg-paper lg:hidden">
           <nav className="mx-auto flex max-w-[1240px] flex-col gap-1 px-5 py-3">
-            {NAV.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.label}
                 href={item.href}
@@ -112,7 +114,7 @@ export function SiteHeader() {
                 <ButtonLink href="/dang-nhap" variant="outline" size="md" className="flex-1">
                   Đăng nhập
                 </ButtonLink>
-                <ButtonLink href="/schools" variant="primary" size="md" className="flex-1">
+                <ButtonLink href={`/schools/${schoolId}/subjects`} variant="primary" size="md" className="flex-1">
                   Thi thử ngay
                 </ButtonLink>
               </div>

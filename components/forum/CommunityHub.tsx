@@ -22,6 +22,7 @@ import { STUDENT } from "@/lib/student";
 import { Avatar } from "./Avatar";
 import { ForumContent } from "./ForumContent";
 import { ChatChannel } from "./ChatChannel";
+import { useAuth } from "@/lib/auth";
 
 export function CommunityHub({
   seedPosts,
@@ -32,7 +33,20 @@ export function CommunityHub({
   chatSeed: ChatMessage[];
   initialTag: string | null;
 }) {
-  const [posts, setPosts] = useState<Post[]>(seedPosts);
+  const user = useAuth();
+  const schoolId = user?.schoolId || "fptu";
+
+  // Lọc các bài post mẫu theo trường của user
+  const schoolSeedPosts = useMemo(() => {
+    return seedPosts.filter((p) => p.schoolId === schoolId);
+  }, [seedPosts, schoolId]);
+
+  // Lọc các tin nhắn chat mẫu theo trường của user
+  const schoolChatSeed = useMemo(() => {
+    return chatSeed.filter((c) => c.schoolId === schoolId);
+  }, [chatSeed, schoolId]);
+
+  const [posts, setPosts] = useState<Post[]>([]);
   const [activeTag, setActiveTag] = useState<string | null>(initialTag);
   const [liked, setLiked] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -44,15 +58,13 @@ export function CommunityHub({
     setActiveTag(initialTag);
   }
 
-  // Bài đăng do người dùng tạo trong phiên
+  // Bài đăng do người dùng tạo trong phiên (chỉ lọc bài của trường này)
   useEffect(() => {
-    const mine = readUserPosts();
-    if (mine.length) {
-      setTimeout(() => {
-        setPosts([...mine, ...seedPosts]);
-      }, 0);
-    }
-  }, [seedPosts]);
+    const mine = readUserPosts().filter((p) => p.schoolId === schoolId);
+    setTimeout(() => {
+      setPosts([...mine, ...schoolSeedPosts]);
+    }, 0);
+  }, [schoolSeedPosts, schoolId]);
 
   const trending = useMemo(() => trendingTags(posts), [posts]);
   const filtered = activeTag
@@ -77,6 +89,7 @@ export function CommunityHub({
         .split(/\n{2,}/)
         .filter(Boolean)
         .map((t) => ({ type: "p" as const, text: t.trim() })),
+      schoolId: schoolId,
       hashtags: tags,
       likes: 0,
       comments: [],
@@ -178,7 +191,7 @@ export function CommunityHub({
         {/* CHAT */}
         <div className={tab === "feed" ? "hidden lg:block" : ""}>
           <div className="lg:sticky lg:top-20">
-            <ChatChannel seed={chatSeed} />
+            <ChatChannel seed={schoolChatSeed} schoolId={schoolId} />
           </div>
         </div>
       </div>

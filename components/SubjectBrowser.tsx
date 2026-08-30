@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   CalendarDays,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import type { Difficulty, School, Subject } from "@/lib/types";
 import { classify, TONE_COLOR } from "@/lib/grade";
+import { useAuth } from "@/lib/auth";
 
 const DIFF_STYLE: Record<Difficulty, string> = {
   "Cơ bản": "border-green text-green bg-green-soft",
@@ -29,6 +31,16 @@ export function SubjectBrowser({
   school: School;
   subjects: Subject[];
 }) {
+  const user = useAuth();
+  const router = useRouter();
+
+  // Redirect if logged-in user belongs to another school
+  useEffect(() => {
+    if (user && user.schoolId && user.schoolId !== school.id) {
+      router.replace(`/schools/${user.schoolId}/subjects`);
+    }
+  }, [user, school.id, router]);
+
   const [query, setQuery] = useState("");
   const [diff, setDiff] = useState<string | null>(null);
   const [faculty, setFaculty] = useState<string | null>(null);

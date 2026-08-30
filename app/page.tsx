@@ -84,7 +84,7 @@ export default function LandingPage() {
               <span className="relative whitespace-nowrap text-orange">
                 phần mềm thi
                 <svg className="absolute -bottom-1 left-0 w-full" height="9" viewBox="0 0 200 9" preserveAspectRatio="none" fill="none">
-                  <path d="M2 6.5C40 2.5 160 2 198 5.5" stroke="#078df8" strokeWidth="3" strokeLinecap="round" />
+                  <path d="M2 6.5C40 2.5 160 2 198 5.5" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
                 </svg>
               </span>{" "}
               của trường bạn
@@ -96,7 +96,7 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-7 flex flex-wrap items-center gap-3">
-              <ButtonLink href="/schools" size="lg">
+              <ButtonLink href="/schools/fptu/subjects" size="lg">
                 Thi thử ngay <ArrowRight size={18} />
               </ButtonLink>
               <ButtonLink href="#huong-dan" variant="outline" size="lg">

@@ -8,6 +8,7 @@ import { SocialAuth } from "./SocialAuth";
 import { Captcha } from "./Captcha";
 import { TextField, PasswordField, SubmitButton } from "./Fields";
 import { registerAPI } from "@/lib/auth";
+import { SCHOOLS } from "@/lib/schools";
 
 export function RegisterForm() {
   const router = useRouter();
@@ -15,6 +16,7 @@ export function RegisterForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [schoolId, setSchoolId] = useState("fptu");
   const [agree, setAgree] = useState(false);
   const [captcha, setCaptcha] = useState(false);
   const [errors, setErrors] = useState<{
@@ -41,10 +43,11 @@ export function RegisterForm() {
     if (Object.keys(er).length === 0) {
       setIsSubmitting(true);
       try {
-        await registerAPI(name, email, password);
+        await registerAPI(name, email, password, schoolId);
         router.push(`/xac-thuc-otp?email=${encodeURIComponent(email)}`);
-      } catch (error: any) {
-        setErrors({ ...er, email: error.message });
+      } catch (error) {
+        const err = error as Error;
+        setErrors({ ...er, email: err.message });
       } finally {
         setIsSubmitting(false);
       }
@@ -64,6 +67,22 @@ export function RegisterForm() {
           error={errors.name}
           autoComplete="name"
         />
+        <div>
+          <label className="mb-1.5 flex items-center gap-1 text-[14px] font-semibold text-ink">
+            Trường đại học của bạn <span className="text-danger">*</span>
+          </label>
+          <select
+            value={schoolId}
+            onChange={(e) => setSchoolId(e.target.value)}
+            className="h-12 w-full rounded-[8px] border border-line bg-paper px-4 text-[15px] outline-none transition-colors focus:border-orange text-ink"
+          >
+            {SCHOOLS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.abbr})
+              </option>
+            ))}
+          </select>
+        </div>
         <TextField
           label="Email"
           required

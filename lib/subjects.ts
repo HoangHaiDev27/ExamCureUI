@@ -38,6 +38,54 @@ const POOL: SubjectSeed[] = [
   { name: "Tiếng Anh học thuật", code: "AET201", faculty: "Ngoại ngữ", kind: "english", fields: ["Ngoại ngữ", "Kinh tế", "Đa ngành"], dur: 60, q: 40, diff: "Trung bình" },
 ];
 
+const FPTU_POOL: SubjectSeed[] = [
+  // --- Kỹ thuật Phần mềm ---
+  { name: "Lập trình hướng đối tượng", code: "PRO192", faculty: "Kỹ thuật phần mềm", kind: "code", fields: ["Công nghệ"], dur: 60, q: 40, diff: "Trung bình" },
+  { name: "Cấu trúc dữ liệu & Giải thuật", code: "CSD201", faculty: "Kỹ thuật phần mềm", kind: "code", fields: ["Công nghệ"], dur: 90, q: 40, diff: "Nâng cao" },
+  { name: "Cơ sở dữ liệu", code: "DBI202", faculty: "Kỹ thuật phần mềm", kind: "code", fields: ["Công nghệ"], dur: 60, q: 35, diff: "Trung bình" },
+  { name: "Nhập môn Kỹ nghệ phần mềm", code: "SWE201", faculty: "Kỹ thuật phần mềm", kind: "code", fields: ["Công nghệ"], dur: 60, q: 40, diff: "Trung bình" },
+  { name: "Lập trình Web cơ bản", code: "WEB201", faculty: "Kỹ thuật phần mềm", kind: "code", fields: ["Công nghệ"], dur: 75, q: 35, diff: "Trung bình" },
+  { name: "Lập trình ứng dụng .NET (PRN211)", code: "PRN211", faculty: "Kỹ thuật phần mềm", kind: "code", fields: ["Công nghệ"], dur: 90, q: 40, diff: "Nâng cao" },
+  { name: "Lập trình di động ứng dụng", code: "PRM391", faculty: "Kỹ thuật phần mềm", kind: "code", fields: ["Công nghệ"], dur: 90, q: 40, diff: "Nâng cao" },
+  { name: "Lập trình Front-End với React", code: "FER201", faculty: "Kỹ thuật phần mềm", kind: "code", fields: ["Công nghệ"], dur: 75, q: 35, diff: "Trung bình" },
+  { name: "Hệ điều hành", code: "OSG202", faculty: "Kỹ thuật phần mềm", kind: "theory", fields: ["Công nghệ"], dur: 60, q: 40, diff: "Trung bình" },
+  { name: "Mạng máy tính", code: "NWC203", faculty: "Kỹ thuật phần mềm", kind: "theory", fields: ["Công nghệ"], dur: 60, q: 40, diff: "Trung bình" },
+
+  // --- An toàn Thông tin ---
+  { name: "Nhập môn An toàn thông tin", code: "IAS201", faculty: "An toàn thông tin", kind: "theory", fields: ["Công nghệ"], dur: 60, q: 40, diff: "Trung bình" },
+  { name: "Mật mã học & An ninh mạng", code: "IAS301", faculty: "An toàn thông tin", kind: "theory", fields: ["Công nghệ"], dur: 75, q: 40, diff: "Nâng cao" },
+  { name: "Phòng thủ mạng (Cyber Defense)", code: "IAS302", faculty: "An toàn thông tin", kind: "theory", fields: ["Công nghệ"], dur: 75, q: 40, diff: "Nâng cao" },
+  { name: "Điều tra kỹ thuật số (Digital Forensics)", code: "IAS303", faculty: "An toàn thông tin", kind: "theory", fields: ["Công nghệ"], dur: 90, q: 45, diff: "Nâng cao" },
+
+  // --- Trí tuệ Nhân tạo ---
+  { name: "Học máy (Machine Learning)", code: "AIL302", faculty: "Trí tuệ nhân tạo", kind: "math", fields: ["Công nghệ"], dur: 90, q: 40, diff: "Nâng cao" },
+  { name: "Học sâu (Deep Learning)", code: "AID301", faculty: "Trí tuệ nhân tạo", kind: "math", fields: ["Công nghệ"], dur: 90, q: 40, diff: "Nâng cao" },
+  { name: "Thị giác máy tính (Computer Vision)", code: "AIV301", faculty: "Trí tuệ nhân tạo", kind: "math", fields: ["Công nghệ"], dur: 90, q: 40, diff: "Nâng cao" },
+  { name: "Xử lý ngôn ngữ tự nhiên (NLP)", code: "NLP301", faculty: "Trí tuệ nhân tạo", kind: "math", fields: ["Công nghệ"], dur: 90, q: 40, diff: "Nâng cao" },
+
+  // --- Quản trị Kinh doanh ---
+  { name: "Nguyên lý Marketing", code: "MKT201", faculty: "Quản trị kinh doanh", kind: "theory", fields: ["Kinh tế"], dur: 60, q: 40, diff: "Cơ bản" },
+  { name: "Nhập môn Quản trị học", code: "MGT103", faculty: "Quản trị kinh doanh", kind: "theory", fields: ["Kinh tế"], dur: 60, q: 45, diff: "Cơ bản" },
+  { name: "Hành vi tổ chức", code: "OBG201", faculty: "Quản trị kinh doanh", kind: "theory", fields: ["Kinh tế"], dur: 60, q: 40, diff: "Trung bình" },
+  { name: "Thị trường & Định chế tài chính", code: "FIN202", faculty: "Quản trị kinh doanh", kind: "econ", fields: ["Kinh tế"], dur: 60, q: 40, diff: "Trung bình" },
+  { name: "Khởi nghiệp (Entrepreneurship)", code: "ENT301", faculty: "Quản trị kinh doanh", kind: "theory", fields: ["Kinh tế"], dur: 75, q: 35, diff: "Trung bình" },
+
+  // --- Thiết kế Mỹ thuật số ---
+  { name: "Nhập môn Mỹ thuật số", code: "DAD101", faculty: "Thiết kế mỹ thuật số", kind: "theory", fields: ["Đa ngành"], dur: 60, q: 40, diff: "Cơ bản" },
+  { name: "Nguyên lý thị giác & Màu sắc", code: "DAD201", faculty: "Thiết kế mỹ thuật số", kind: "theory", fields: ["Đa ngành"], dur: 60, q: 40, diff: "Cơ bản" },
+  { name: "Tạo hình 3D & Hoạt cảnh", code: "DAD301", faculty: "Thiết kế mỹ thuật số", kind: "theory", fields: ["Đa ngành"], dur: 90, q: 35, diff: "Nâng cao" },
+
+  // --- Đại cương & Ngoại ngữ ---
+  { name: "Toán rời rạc (Discrete Mathematics)", code: "MAD101", faculty: "Đại cương & Ngoại ngữ", kind: "math", fields: ["Công nghệ", "Kỹ thuật"], dur: 90, q: 35, diff: "Trung bình" },
+  { name: "Giải tích 1", code: "MAE101", faculty: "Đại cương & Ngoại ngữ", kind: "math", fields: ["Công nghệ", "Kỹ thuật"], dur: 90, q: 30, diff: "Nâng cao" },
+  { name: "Xác suất thống kê", code: "MAS291", faculty: "Đại cương & Ngoại ngữ", kind: "math", fields: ["Công nghệ", "Kinh tế", "Kỹ thuật"], dur: 75, q: 35, diff: "Trung bình" },
+  { name: "Triết học Mác – Lênin", code: "MLN111", faculty: "Đại cương & Ngoại ngữ", kind: "theory", fields: ["Công nghệ", "Kinh tế", "Kỹ thuật", "Ngoại ngữ"], dur: 60, q: 45, diff: "Cơ bản" },
+  { name: "Tư tưởng Hồ Chí Minh", code: "HCM201", faculty: "Đại cương & Ngoại ngữ", kind: "theory", fields: ["Công nghệ", "Kinh tế", "Kỹ thuật", "Ngoại ngữ"], dur: 60, q: 40, diff: "Cơ bản" },
+  { name: "Kỹ năng học tập đại học (SSL101)", code: "SSL101", faculty: "Đại cương & Ngoại ngữ", kind: "theory", fields: ["Công nghệ", "Kinh tế", "Kỹ thuật", "Ngoại ngữ"], dur: 60, q: 40, diff: "Cơ bản" },
+  { name: "Tiếng Nhật cơ bản 1A", code: "JPN111", faculty: "Đại cương & Ngoại ngữ", kind: "english", fields: ["Ngoại ngữ"], dur: 60, q: 40, diff: "Cơ bản" },
+  { name: "Viết luận Tiếng Anh (ENW301)", code: "ENW301", faculty: "Đại cương & Ngoại ngữ", kind: "english", fields: ["Ngoại ngữ"], dur: 60, q: 40, diff: "Trung bình" }
+];
+
 function hash(str: string): number {
   let h = 2166136261;
   for (let i = 0; i < str.length; i++) {
@@ -54,8 +102,10 @@ export function getSubjects(schoolId: string): Subject[] {
   const school = getSchool(schoolId);
   if (!school) return [];
 
-  const fitting = POOL.filter((s) => s.fields.includes(school.field));
-  const list = fitting.length >= 6 ? fitting : POOL; // fallback to full pool
+  const isFPT = schoolId === "fptu";
+  const sourcePool = isFPT ? FPTU_POOL : POOL;
+  const fitting = isFPT ? FPTU_POOL : POOL.filter((s) => s.fields.includes(school.field));
+  const list = fitting.length >= 6 ? fitting : sourcePool; // fallback to full pool
 
   return list.map((seed): Subject => {
     const h = hash(schoolId + seed.code);

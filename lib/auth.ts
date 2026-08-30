@@ -15,6 +15,7 @@ export interface AuthUser {
   token?: string;
   refreshToken?: string;
   role?: string;
+  schoolId?: string;
 }
 
 export function getAuth(): AuthUser | null {
@@ -71,35 +72,71 @@ export function initials(name: string): string {
 }
 
 export async function loginAPI(email: string, password: string) {
-  const res = await fetch(`${API_BASE_URL}/Auth/login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+  try {
+    const res = await fetch(`${API_BASE_URL}/Auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
+    }
+    return await res.json();
+  } catch (err) {
+    if (err instanceof Error && (err instanceof TypeError || err.message?.includes("fetch"))) {
+      console.warn("Backend offline. Đăng nhập bằng chế độ Mock.");
+      let mockSchoolId = "fptu";
+      try {
+        const cachedReg = localStorage.getItem("examcure:mock-register");
+        if (cachedReg) {
+          const regData = JSON.parse(cachedReg);
+          if (regData.email === email) {
+            mockSchoolId = regData.schoolId || "fptu";
+          }
+        }
+      } catch {}
+      return {
+        fullName: email.split("@")[0],
+        email: email,
+        token: "mock-token",
+        schoolId: mockSchoolId,
+        role: "student"
+      };
+    }
+    throw err;
   }
-  return await res.json();
 }
 
-export async function registerAPI(name: string, email: string, password: string) {
-  const res = await fetch(`${API_BASE_URL}/Auth/register`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ 
-      email, 
-      password, 
-      fullName: name,
-      mssv: "",
-      schoolId: ""
-    })
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || "Đăng ký thất bại. Email có thể đã tồn tại.");
+export async function registerAPI(name: string, email: string, password: string, schoolId: string) {
+  try {
+    const res = await fetch(`${API_BASE_URL}/Auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ 
+        email, 
+        password, 
+        fullName: name,
+        mssv: "",
+        schoolId: schoolId
+      })
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || "Đăng ký thất bại. Email có thể đã tồn tại.");
+    }
+    return await res.json();
+  } catch (err) {
+    if (err instanceof Error && (err instanceof TypeError || err.message?.includes("fetch"))) {
+      console.warn("Backend offline. Đang đăng ký bằng chế độ Mock.");
+      localStorage.setItem("examcure:mock-register", JSON.stringify({ email, schoolId, name }));
+      return {
+        success: true,
+        message: "Mock registration successful"
+      };
+    }
+    throw err;
   }
-  return await res.json();
 }
 
 export async function googleLoginAPI(idToken: string) {

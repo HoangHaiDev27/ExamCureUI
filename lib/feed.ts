@@ -18,6 +18,7 @@ export interface Post {
   ts: number;
   title?: string;
   content: Block[];
+  schoolId?: string;
   /** hashtag dạng token ascii, không kèm dấu '#'. */
   hashtags: string[];
   likes: number;
@@ -29,6 +30,7 @@ export interface ChatMessage {
   author: string;
   time: string;
   text: string;
+  schoolId?: string;
 }
 
 /* --- ánh xạ chuyên mục / thẻ cũ sang hashtag --- */
@@ -65,24 +67,48 @@ function tagToken(tag: string): string {
 }
 
 /* --- Bài đăng dựng từ dữ liệu chủ đề + vài status ngắn --- */
-const fromThreads: Post[] = THREADS.map((t) => ({
-  id: t.id,
-  author: t.author,
-  date: t.date,
-  ts: t.ts,
-  title: t.title,
-  content: t.body,
-  hashtags: Array.from(
-    new Set([tagToken(t.tag), CATEGORY_HASHTAG[t.categoryId]].filter(Boolean))
-  ),
-  likes: Math.max(3, Math.round(t.views / 25)),
-  comments: t.replies.map((r) => ({
-    id: r.id,
-    author: r.author,
-    date: r.date,
-    body: r.body,
-  })),
-}));
+function hash(str: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/* --- Bài đăng dựng từ dữ liệu chủ đề + vài status ngắn --- */
+const fromThreads: Post[] = THREADS.map((t) => {
+  let schoolId = "fptu";
+  const tagLower = t.tag.toLowerCase();
+  if (tagLower.includes("mae101") || tagLower.includes("mae")) schoolId = "hust";
+  else if (tagLower.includes("eco")) schoolId = "neu";
+  else if (tagLower.includes("mas291")) schoolId = "fptu";
+  else {
+    const h = hash(t.id);
+    const schools = ["fptu", "hust", "neu", "hcmut"];
+    schoolId = schools[h % schools.length];
+  }
+
+  return {
+    id: t.id,
+    author: t.author,
+    date: t.date,
+    ts: t.ts,
+    title: t.title,
+    content: t.body,
+    schoolId,
+    hashtags: Array.from(
+      new Set([tagToken(t.tag), CATEGORY_HASHTAG[t.categoryId]].filter(Boolean))
+    ),
+    likes: Math.max(3, Math.round(t.views / 25)),
+    comments: t.replies.map((r) => ({
+      id: r.id,
+      author: r.author,
+      date: r.date,
+      body: r.body,
+    })),
+  };
+});
 
 const statusPosts: Post[] = [
   {
@@ -90,6 +116,7 @@ const statusPosts: Post[] = [
     author: "hoangdz",
     date: "Hôm nay",
     ts: 112,
+    schoolId: "fptu",
     content: [
       { type: "p", text: "Mẹo nhỏ cho anh em làm đồ án: dùng Git và commit từ ngày đầu tiên. Sau này gộp nhóm, sửa bug hay quay lại bản cũ đỡ khổ hơn rất nhiều." },
     ],
@@ -104,6 +131,7 @@ const statusPosts: Post[] = [
     author: "tuan_anh",
     date: "Hôm qua",
     ts: 108,
+    schoolId: "fptu",
     content: [
       { type: "p", text: "Có ai đang ôn MAS291 cuối kỳ không? Lập một nhóm ôn chung, mỗi người phụ trách một chương rồi chia sẻ lại nhé." },
     ],
@@ -116,6 +144,7 @@ const statusPosts: Post[] = [
     author: "ngoc99",
     date: "2 ngày trước",
     ts: 104,
+    schoolId: "fptu",
     content: [
       { type: "p", text: "Vừa hoàn thành thử thách 30 ngày học từ vựng TOEIC. Recommend mọi người thử — quan trọng là đều đặn chứ không cần học nhiều một lúc." },
     ],
@@ -143,11 +172,14 @@ export function trendingTags(
 
 /* --- Chat chung --- */
 export const CHAT_SEED: ChatMessage[] = [
-  { id: "m1", author: "lan.pham", time: "08:42", text: "Chào cả nhà, tuần này có ai thi thử PRO192 chưa?" },
-  { id: "m2", author: "hoangdz", time: "08:45", text: "Mình thi rồi, giao diện y hệt phần mềm thi của trường luôn, quen tay phết." },
-  { id: "m3", author: "k10n10", time: "08:51", text: "Phần đánh dấu xem lại tiện thật, lúc thi thật mình hay quên mất câu khó." },
-  { id: "m4", author: "ngoc99", time: "09:03", text: "Mọi người ôn TOEIC bằng tài liệu nào vậy? Cho mình xin với." },
-  { id: "m5", author: "tuan_anh", time: "09:10", text: "Có bài viết 1000 từ TOEIC 30 ngày trên bảng tin đó, ngon lắm." },
+  { id: "m1", author: "lan.pham", time: "08:42", text: "Chào cả nhà, tuần này có ai thi thử PRO192 chưa?", schoolId: "fptu" },
+  { id: "m2", author: "hoangdz", time: "08:45", text: "Mình thi rồi, giao diện y hệt phần mềm thi của trường luôn, quen tay phết.", schoolId: "fptu" },
+  { id: "m3", author: "k10n10", time: "08:51", text: "Phần đánh dấu xem lại tiện thật, lúc thi thật mình hay quên mất câu khó.", schoolId: "fptu" },
+  { id: "m4", author: "ngoc99", time: "09:03", text: "Mọi người ôn TOEIC bằng tài liệu nào vậy? Cho mình xin với.", schoolId: "fptu" },
+  { id: "m5", author: "tuan_anh", time: "09:10", text: "Có bài viết 1000 từ TOEIC 30 ngày trên bảng tin đó, ngon lắm.", schoolId: "fptu" },
+  { id: "m_hust1", author: "bk_student", time: "09:20", text: "Bên Bách Khoa có ai làm xong đề thi Giải tích 1 chưa?", schoolId: "hust" },
+  { id: "m_hust2", author: "hust_cuber", time: "09:25", text: "Đề Giải tích 1 năm nay khoai quá, Moodle load hơi chậm.", schoolId: "hust" },
+  { id: "m_neu1", author: "neu_girl", time: "09:30", text: "Kinh tế vi mô thầy nào chấm dễ thở nhất mọi người ơi?", schoolId: "neu" },
 ];
 
 /* --- Lưu nội dung người dùng tạo trong phiên (sessionStorage) --- */

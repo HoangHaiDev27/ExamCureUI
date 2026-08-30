@@ -1,8 +1,11 @@
+"use client";
+
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { getSchool } from "@/lib/schools";
 import { getSubject } from "@/lib/subjects";
 import { RecommendedCarousel, type RecItem } from "./RecommendedCarousel";
+import { useAuth } from "@/lib/auth";
 
 /** Đề thi gợi ý — curated, mỗi đề một lý do đề xuất. */
 const RECOMMENDED = [
@@ -17,7 +20,13 @@ const RECOMMENDED = [
 ];
 
 export function RecommendedExams() {
-  const items: RecItem[] = RECOMMENDED.map((r) => ({
+  const user = useAuth();
+  const schoolId = user?.schoolId || "fptu";
+
+  // Lọc chỉ hiển thị đề thi của trường người dùng đang chọn
+  const filtered = RECOMMENDED.filter((r) => r.schoolId === schoolId);
+
+  const items: RecItem[] = filtered.map((r) => ({
     reason: r.reason,
     school: getSchool(r.schoolId),
     subject: getSubject(r.schoolId, r.subjectId),
@@ -41,14 +50,18 @@ export function RecommendedExams() {
             </p>
           </div>
           <Link
-            href="/schools"
+            href={`/schools/${schoolId}/subjects`}
             className="inline-flex items-center gap-1.5 text-[14px] font-medium text-orange transition-colors hover:text-orange-dark"
           >
             Xem tất cả đề <ArrowRight size={16} />
           </Link>
         </div>
 
-        <RecommendedCarousel items={items} />
+        {items.length > 0 ? (
+          <RecommendedCarousel items={items} />
+        ) : (
+          <p className="mt-8 text-center text-ink-3">Chưa có đề xuất thi thử nào cho trường này.</p>
+        )}
       </div>
     </section>
   );
