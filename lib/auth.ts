@@ -16,6 +16,7 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost
 export interface AuthUser {
   name: string;
   email?: string;
+  avatarUrl?: string;
   token?: string;
   refreshToken?: string;
   role?: string;
@@ -97,6 +98,12 @@ export async function loginAPI(email: string, password: string) {
       refreshToken: data.session.refresh_token,
       schoolId: profile?.school_id || data.user.user_metadata.school_id || "fptu",
       role: profile?.role || "student",
+      avatarUrl:
+        typeof data.user.user_metadata.avatar_url === "string"
+          ? data.user.user_metadata.avatar_url
+          : typeof data.user.user_metadata.picture === "string"
+            ? data.user.user_metadata.picture
+            : undefined,
     };
   }
 
@@ -338,5 +345,11 @@ export async function authUserFromSupabaseSession() {
     refreshToken: session.refresh_token,
     schoolId: profile?.school_id || session.user.user_metadata.school_id || "fptu",
     role: profile?.role || "student",
+    avatarUrl:
+      typeof session.user.user_metadata.avatar_url === "string"
+        ? session.user.user_metadata.avatar_url
+        : typeof session.user.user_metadata.picture === "string"
+          ? session.user.user_metadata.picture
+          : undefined,
   } satisfies AuthUser;
 }

@@ -42,6 +42,7 @@ export function LoginForm({
         login({
           name: data.fullName || data.email || STUDENT.name,
           email: data.email || email,
+          avatarUrl: data.avatarUrl,
           token: data.token,
           refreshToken: data.refreshToken,
           role: data.role,

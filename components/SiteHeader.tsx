@@ -164,9 +164,7 @@ function UserMenu({ user }: { user: AuthUser }) {
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-ink text-[12px] font-semibold text-white">
-          {initials(user.name)}
-        </span>
+        <HeaderAvatar user={user} size={32} />
         <span className="max-w-[120px] truncate text-[13.5px] font-medium text-ink">{short}</span>
         <ChevronDown size={15} className={`text-ink-3 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -177,9 +175,7 @@ function UserMenu({ user }: { user: AuthUser }) {
           className="absolute right-0 top-[calc(100%+8px)] w-60 overflow-hidden rounded-[10px] border border-line bg-paper py-1 shadow-[var(--shadow-pop)]"
         >
           <div className="flex items-center gap-3 border-b border-line px-4 py-3">
-            <span className="grid h-9 w-9 place-items-center rounded-full bg-ink text-[13px] font-semibold text-white">
-              {initials(user.name)}
-            </span>
+            <HeaderAvatar user={user} size={36} />
             <div className="min-w-0">
               <p className="truncate text-[13.5px] font-semibold text-ink">{user.name}</p>
               {user.email && <p className="truncate text-[12px] text-ink-3">{user.email}</p>}
@@ -223,4 +219,11 @@ function UserMenu({ user }: { user: AuthUser }) {
       )}
     </div>
   );
+}
+
+function HeaderAvatar({ user, size }: { user: AuthUser; size: number }) {
+  if (user.avatarUrl) {
+    return <img src={user.avatarUrl} alt="" width={size} height={size} className="shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />;
+  }
+  return <span className="grid shrink-0 place-items-center rounded-full bg-ink font-semibold text-white" style={{ width: size, height: size, fontSize: size * 0.4 }}>{initials(user.name)}</span>;
 }

@@ -22,6 +22,8 @@ import {
   ChevronDown,
   Menu,
   Search,
+  LogOut,
+  UserRound,
   X,
 } from "lucide-react";
 import { getSchool } from "@/lib/schools";
@@ -32,7 +34,7 @@ import { Logo } from "@/components/Logo";
 import { FlashcardWorkspace } from "@/components/FlashcardWorkspace";
 import { STUDENT, mssvFor } from "@/lib/student";
 import { classify, TONE_COLOR } from "@/lib/grade";
-import { useAuth, initials } from "@/lib/auth";
+import { logout, useAuth, initials } from "@/lib/auth";
 
 const NAV_GROUPS = [
   {
@@ -187,6 +189,8 @@ const CHAPTERS_DATA: Record<string, { title: string; slides: string[] }[]> = {
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("tong-quan");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
   const [expandedTerms, setExpandedTerms] = useState<Set<number>>(() => new Set(Array.from({ length: 9 }, (_, index) => index + 1)));
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuPanelRef = useRef<HTMLDivElement>(null);
@@ -198,6 +202,14 @@ export default function DashboardPage() {
   const suggested = subjects.slice(0, 5);
 
   const studentName = user?.name || STUDENT.name;
+  const avatarUrl = user?.avatarUrl;
+
+  const signOut = () => {
+    setIsProfileMenuOpen(false);
+    setIsMobileMenuOpen(false);
+    logout();
+    window.location.assign("/");
+  };
 
   const getMockSubject = (code: string, fallbackIndex: number) =>
     subjects.find((subject) => subject.code.toLowerCase() === code.toLowerCase()) || subjects[fallbackIndex];
@@ -407,7 +419,7 @@ export default function DashboardPage() {
       style={schoolId === "fptu" ? FPT_DASHBOARD_ACCENT : undefined}
     >
       {/* Sidebar */}
-      <aside className="dashboard-sidebar hidden h-[100dvh] w-[268px] flex-none overflow-y-auto overscroll-contain border-r border-line bg-paper lg:block">
+      <aside className="dashboard-sidebar sticky top-0 hidden h-[100dvh] w-[268px] self-start flex-none overflow-y-auto overscroll-contain border-r border-line bg-paper lg:block">
         <div className="flex min-h-full flex-col justify-between p-6">
           <div>
             {/* Logo and site title */}
@@ -470,14 +482,16 @@ export default function DashboardPage() {
           </div>
 
           {/* Profile Info ở cuối Sidebar */}
-          <div className="pt-4 border-t border-line">
-            <div className="flex items-center gap-3 rounded-[8px] border border-line bg-paper-2 p-3">
-              <Avatar size={38} name={studentName} />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[13.5px] font-semibold text-ink leading-tight">{studentName}</p>
-                <p className="tnum text-[11px] text-ink-3 mt-0.5">{mssv}</p>
-              </div>
-            </div>
+          <div className="border-t border-line pt-4">
+            <DashboardAccountControl
+              name={studentName}
+              mssv={mssv}
+              avatarUrl={avatarUrl}
+              menuOpen={isProfileMenuOpen}
+              onToggle={() => setIsProfileMenuOpen((open) => !open)}
+              onAccount={() => { setIsProfileMenuOpen(false); setIsAccountModalOpen(true); }}
+              onSignOut={signOut}
+            />
           </div>
         </div>
       </aside>
@@ -547,14 +561,16 @@ export default function DashboardPage() {
             </nav>
 
             <div className="mt-auto border-t border-line pt-4">
-              <div className="flex items-center gap-3 rounded-[8px] bg-paper-2 p-3">
-                <Avatar size={38} name={studentName} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-[13.5px] font-semibold text-ink">{studentName}</p>
-                  <p className="tnum text-[11px] text-ink-3">{mssv} · {home.abbr}</p>
-                </div>
-                <SchoolMark theme={home.theme} abbr={home.abbr} size={22} />
-              </div>
+              <DashboardAccountControl
+                name={studentName}
+                mssv={`${mssv} · ${home.abbr}`}
+                avatarUrl={avatarUrl}
+                menuOpen={isProfileMenuOpen}
+                onToggle={() => setIsProfileMenuOpen((open) => !open)}
+                onAccount={() => { setIsProfileMenuOpen(false); setIsMobileMenuOpen(false); setIsAccountModalOpen(true); }}
+                onSignOut={signOut}
+                trailing={<SchoolMark theme={home.theme} abbr={home.abbr} size={22} />}
+              />
             </div>
           </div>
         </div>
@@ -1229,11 +1245,71 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {isAccountModalOpen && (
+        <div className="fixed inset-0 z-[70] grid place-items-center p-4" role="presentation">
+          <button type="button" aria-label="Đóng thông tin tài khoản" onClick={() => setIsAccountModalOpen(false)} className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" />
+          <section role="dialog" aria-modal="true" aria-labelledby="account-modal-title" className="relative w-full max-w-md rounded-[14px] border border-line bg-paper p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-[12px] font-semibold uppercase tracking-wide text-orange">Hồ sơ</p><h2 id="account-modal-title" className="mt-1 text-[21px] font-bold text-ink">Thông tin tài khoản</h2></div>
+              <button type="button" onClick={() => setIsAccountModalOpen(false)} aria-label="Đóng" className="grid h-9 w-9 place-items-center rounded-[7px] text-ink-3 hover:bg-paper-2 hover:text-ink"><X size={18} /></button>
+            </div>
+            <div className="mt-6 flex items-center gap-4 rounded-[10px] border border-line bg-paper-2 p-4">
+              <Avatar size={56} name={studentName} avatarUrl={avatarUrl} />
+              <div className="min-w-0"><p className="truncate text-[16px] font-semibold text-ink">{studentName}</p><p className="truncate text-[13px] text-ink-3">{user?.email || "Chưa có email"}</p></div>
+            </div>
+            <dl className="mt-5 divide-y divide-line rounded-[10px] border border-line px-4">
+              <div className="flex items-center justify-between gap-4 py-3"><dt className="text-[13px] text-ink-3">Mã sinh viên</dt><dd className="text-right text-[13px] font-semibold text-ink">{mssv}</dd></div>
+              <div className="flex items-center justify-between gap-4 py-3"><dt className="text-[13px] text-ink-3">Trường</dt><dd className="text-right text-[13px] font-semibold text-ink">{home.name}</dd></div>
+              <div className="flex items-center justify-between gap-4 py-3"><dt className="text-[13px] text-ink-3">Vai trò</dt><dd className="text-right text-[13px] font-semibold capitalize text-ink">{user?.role || "student"}</dd></div>
+            </dl>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
 
-function Avatar({ size = 36, name = "Student" }: { size?: number; name?: string }) {
+function DashboardAccountControl({
+  name,
+  mssv,
+  avatarUrl,
+  menuOpen,
+  onToggle,
+  onAccount,
+  onSignOut,
+  trailing,
+}: {
+  name: string;
+  mssv: string;
+  avatarUrl?: string;
+  menuOpen: boolean;
+  onToggle: () => void;
+  onAccount: () => void;
+  onSignOut: () => void;
+  trailing?: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <button type="button" onClick={onToggle} aria-expanded={menuOpen} aria-haspopup="menu" className="flex w-full items-center gap-3 rounded-[8px] border border-line bg-paper-2 p-3 text-left transition-colors hover:border-line-strong hover:bg-paper-3">
+        <Avatar size={38} name={name} avatarUrl={avatarUrl} />
+        <div className="min-w-0 flex-1"><p className="truncate text-[13.5px] font-semibold leading-tight text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-3">{mssv}</p></div>
+        {trailing || <ChevronDown size={16} className={`shrink-0 text-ink-3 transition-transform ${menuOpen ? "rotate-180" : ""}`} />}
+      </button>
+      {menuOpen && (
+        <div role="menu" className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-full overflow-hidden rounded-[9px] border border-line bg-paper p-1 shadow-[var(--shadow-pop)]">
+          <button type="button" role="menuitem" onClick={onAccount} className="flex w-full items-center gap-2 rounded-[6px] px-3 py-2.5 text-left text-[13px] font-medium text-ink-2 hover:bg-paper-2 hover:text-ink"><UserRound size={15} /> Thông tin tài khoản</button>
+          <button type="button" role="menuitem" onClick={onSignOut} className="flex w-full items-center gap-2 rounded-[6px] px-3 py-2.5 text-left text-[13px] font-medium text-danger hover:bg-danger-soft"><LogOut size={15} /> Đăng xuất</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Avatar({ size = 36, name = "Student", avatarUrl }: { size?: number; name?: string; avatarUrl?: string }) {
+  if (avatarUrl) {
+    return <img src={avatarUrl} alt="" width={size} height={size} className="shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />;
+  }
   return (
     <span
       className="grid shrink-0 place-items-center rounded-full bg-ink font-semibold text-white uppercase"

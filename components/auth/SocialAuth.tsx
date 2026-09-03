@@ -63,6 +63,7 @@ function LegacyGoogleAuth({
           localLogin({
             name: data.fullName || data.email || STUDENT.name,
             email: data.email,
+            avatarUrl: data.avatarUrl,
             token: data.token,
             refreshToken: data.refreshToken,
             role: data.role
