@@ -11,7 +11,7 @@ import {
 } from "@/lib/supabase-browser";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "238495034-dummy.apps.googleusercontent.com";
+  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
   const user = useAuth();
   const schoolId = user?.schoolId;
 
@@ -48,9 +48,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, [schoolId]);
 
-  return (
-    <GoogleOAuthProvider clientId={clientId}>
-      <AuthModalProvider>{children}</AuthModalProvider>
-    </GoogleOAuthProvider>
-  );
+  const content = <AuthModalProvider>{children}</AuthModalProvider>;
+  // Supabase OAuth redirects through Supabase and does not need this browser SDK.
+  // The provider is only needed for the legacy backend Google-token flow.
+  return clientId ? <GoogleOAuthProvider clientId={clientId}>{content}</GoogleOAuthProvider> : content;
 }

@@ -17,21 +17,41 @@ export function SocialAuth({
   redirectTo?: string;
   onSuccess?: () => void;
 }) {
-  const router = useRouter();
+  if (isSupabaseBrowserConfigured()) {
+    return <SupabaseGoogleAuth verb={verb} redirectTo={redirectTo} />;
+  }
+  if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()) {
+    return <SocialLayout error="Google đăng nhập chưa được cấu hình." verb={verb} disabled />;
+  }
+  return <LegacyGoogleAuth verb={verb} redirectTo={redirectTo} onSuccess={onSuccess} />;
+}
+
+function SupabaseGoogleAuth({ verb, redirectTo }: { verb: string; redirectTo?: string }) {
   const [error, setError] = useState("");
 
   const handleGoogle = async () => {
-    if (isSupabaseBrowserConfigured()) {
-      try {
-        setError("");
-        await signInWithGoogle(redirectTo ?? "/dashboard");
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Đăng nhập Google thất bại.");
-      }
-      return;
+    try {
+      setError("");
+      await signInWithGoogle(redirectTo ?? "/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Đăng nhập Google thất bại.");
     }
-    loginGoogle();
   };
+
+  return <SocialLayout error={error} verb={verb} onGoogle={() => void handleGoogle()} />;
+}
+
+function LegacyGoogleAuth({
+  verb,
+  redirectTo,
+  onSuccess,
+}: {
+  verb: string;
+  redirectTo?: string;
+  onSuccess?: () => void;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState("");
 
   const loginGoogle = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -60,15 +80,28 @@ export function SocialAuth({
     }
   });
 
+  return <SocialLayout error={error} verb={verb} onGoogle={() => loginGoogle()} />;
+}
+
+function SocialLayout({
+  error,
+  verb,
+  onGoogle,
+  disabled = false,
+}: {
+  error: string;
+  verb: string;
+  onGoogle?: () => void;
+  disabled?: boolean;
+}) {
   return (
     <div>
       {error && <div className="mb-4 rounded-md bg-danger/10 p-3 text-sm text-danger">{error}</div>}
       <div className="flex flex-col gap-2.5">
-        <SocialButton label={`${verb} với Google`} onClick={() => void handleGoogle()}>
+        <SocialButton label={`${verb} với Google`} onClick={onGoogle} disabled={disabled}>
           <GoogleIcon />
         </SocialButton>
       </div>
-
       <div className="my-5 flex items-center gap-3">
         <span className="h-px flex-1 bg-line" />
         <span className="text-[13px] text-ink-3">hoặc</span>
@@ -81,17 +114,20 @@ export function SocialAuth({
 function SocialButton({
   label,
   children,
-  onClick
+  onClick,
+  disabled = false,
 }: {
   label: string;
   children: React.ReactNode;
   onClick?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="inline-flex h-[46px] w-full items-center justify-center gap-3 rounded-[8px] border border-line bg-paper text-[14px] font-semibold text-ink transition-all hover:border-line-strong hover:bg-paper-2 hover:shadow-sm"
+      disabled={disabled}
+      className="inline-flex h-[46px] w-full items-center justify-center gap-3 rounded-[8px] border border-line bg-paper text-[14px] font-semibold text-ink transition-all hover:border-line-strong hover:bg-paper-2 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
     >
       {children}
       <span className="truncate">{label}</span>

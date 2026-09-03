@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth";
+import { API_BASE_URL, useAuth } from "@/lib/auth";
 import {
   BookOpen,
   ChevronRight,
@@ -54,6 +54,8 @@ export function SubjectDetail({
 }) {
   const user = useAuth();
   const router = useRouter();
+  const [uploadedMaterials, setUploadedMaterials] = useState<Material[] | null>(null);
+  const [materialsError, setMaterialsError] = useState<string | null>(null);
 
   // Redirect if logged-in user belongs to another school
   useEffect(() => {
@@ -61,6 +63,46 @@ export function SubjectDetail({
       router.replace(`/schools/${user.schoolId}/subjects/${user.schoolId}-${subject.code.toLowerCase()}`);
     }
   }, [user, school.id, subject.code, router]);
+
+  useEffect(() => {
+    if (!user?.token) {
+      setUploadedMaterials([]);
+      setMaterialsError("Đăng nhập để xem giáo trình do admin đăng.");
+      return;
+    }
+    const controller = new AbortController();
+    const query = new URLSearchParams({ schoolCode: school.id, subjectCode: subject.code });
+    void fetch(`${API_BASE_URL}/Materials?${query}`, {
+      headers: { Authorization: `Bearer ${user.token}` },
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || "Không thể tải giáo trình.");
+        return data as { materials: Array<{
+          title: string; createdAt: string; version: { id: string; slide_count: number; original_filename: string; processed_at: string | null };
+        }> };
+      })
+      .then((data) => {
+        setUploadedMaterials(data.materials.map((entry) => ({
+          id: entry.version.id,
+          type: "slide",
+          title: entry.title,
+          meta: `${entry.version.slide_count} slide`,
+          updated: new Date(entry.version.processed_at || entry.createdAt).toLocaleDateString("vi-VN"),
+          source: entry.version.original_filename,
+        })));
+        setMaterialsError(null);
+      })
+      .catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setUploadedMaterials([]);
+        setMaterialsError(error instanceof Error ? error.message : "Không thể tải giáo trình.");
+      });
+    return () => controller.abort();
+  }, [user?.token, school.id, subject.code]);
+
+  const courseMaterials = uploadedMaterials || [];
 
   const grade = subject.lastScore != null ? classify(subject.lastScore) : null;
   const firstExamHref = `/exam/${school.id}/${subject.id}`;
@@ -136,7 +178,7 @@ export function SubjectDetail({
 
         {/* Section tabs */}
         <div className="flex gap-1 border-t border-line bg-paper-2 px-3 py-2">
-          <TabLink href="#tai-lieu" icon={BookOpen} label="Tài liệu ôn tập" count={materials.length} />
+          <TabLink href="#tai-lieu" icon={BookOpen} label="Tài liệu ôn tập" count={courseMaterials.length} />
           <TabLink href="#thi-thu" icon={FileText} label="Phần thi thử" count={examSets.length} />
         </div>
       </header>
@@ -147,13 +189,19 @@ export function SubjectDetail({
           eyebrow="Ôn trước khi thi"
           title="Tài liệu ôn tập"
           desc="Tổng hợp lý thuyết, công thức và bài tập do giảng viên và cộng đồng đóng góp."
-          count={`${materials.length} tài liệu`}
+          count={`${courseMaterials.length} tài liệu`}
         />
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {materials.map((m) => (
+          {uploadedMaterials === null && <p className="text-[13px] text-ink-3">Đang tải giáo trình...</p>}
+          {uploadedMaterials !== null && courseMaterials.map((m) => (
             <MaterialCard key={m.id} school={school} subject={subject} material={m} />
           ))}
         </div>
+        {uploadedMaterials?.length === 0 && (
+          <p className="mt-5 rounded-[8px] border border-dashed border-line-strong bg-paper px-4 py-3 text-[13px] text-ink-3">
+            {materialsError || "Môn học này chưa có giáo trình được admin xuất bản."}
+          </p>
+        )}
       </section>
 
       {/* ===== Phần thi thử ===== */}

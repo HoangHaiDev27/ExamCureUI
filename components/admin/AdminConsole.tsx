@@ -25,6 +25,7 @@ type ServiceStatus = {
   mongodb: boolean;
   openai: boolean;
   converter: boolean;
+  pptxTextExtraction: boolean;
 };
 
 type Subject = {
@@ -200,6 +201,14 @@ export function AdminConsole() {
       setNotice({ tone: "error", message: "Vui lòng chọn file PowerPoint." });
       return;
     }
+    if (!file.name.toLowerCase().endsWith(".pptx")) {
+      setNotice({ tone: "error", message: "Chế độ không dùng worker chỉ hỗ trợ file .pptx." });
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setNotice({ tone: "error", message: "File PowerPoint phải nhỏ hơn hoặc bằng 20 MB." });
+      return;
+    }
 
     await runAction("upload", async () => {
       const mimeType = file.type || "application/octet-stream";
@@ -227,9 +236,9 @@ export function AdminConsole() {
           upsert: false,
         });
       if (error) throw error;
-      await api(`/Admin/materials/${signed.versionId}/complete-upload`, { method: "POST" });
+      const indexed = await api<{ slideCount: number; chunkCount: number }>(`/Admin/materials/${signed.versionId}/complete-upload`, { method: "POST" });
       formElement.reset();
-      setNotice({ tone: "success", message: "Đã upload PowerPoint và đưa vào hàng đợi xử lý." });
+      setNotice({ tone: "success", message: `Đã trích xuất ${indexed.slideCount} slide và lập chỉ mục ${indexed.chunkCount} đoạn nội dung.` });
     });
   };
 
@@ -366,16 +375,16 @@ export function AdminConsole() {
               </section>
 
               <section className="rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
-                <SectionTitle icon={<FileUp size={18} />} title="2. Upload PowerPoint" subtitle="File được đưa vào Storage và worker sẽ chuyển thành slide." />
+                <SectionTitle icon={<FileUp size={18} />} title="2. Upload PowerPoint" subtitle="Chỉ .pptx tối đa 20 MB; API trích text/note rồi lập chỉ mục Vector DB ngay." />
                 <form onSubmit={uploadPowerPoint} className="mt-5 grid gap-3 sm:grid-cols-2">
                   <Select name="subjectId" label="Môn học" required options={overview.subjects.map((subject) => ({ value: subject.id, label: `${subject.code} — ${subject.name}` }))} />
                   <Field name="title" label="Tên tài liệu" placeholder="Slide chương 1" required />
                   <Field name="description" label="Mô tả" placeholder="Tùy chọn" />
-                  <label className="text-[12px] font-semibold text-ink-2">File PowerPoint
-                    <input name="file" type="file" accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required className="mt-1.5 block h-10 w-full rounded-[8px] border border-line bg-paper-2 px-2 py-1.5 text-[12px] file:mr-2 file:rounded file:border-0 file:bg-orange-soft file:px-2 file:py-1 file:text-orange-dark" />
+                  <label className="text-[12px] font-semibold text-ink-2">File PowerPoint (.pptx, tối đa 20 MB)
+                    <input name="file" type="file" accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation" required className="mt-1.5 block h-10 w-full rounded-[8px] border border-line bg-paper-2 px-2 py-1.5 text-[12px] file:mr-2 file:rounded file:border-0 file:bg-orange-soft file:px-2 file:py-1 file:text-orange-dark" />
                   </label>
                   <button disabled={busy === "upload" || overview.subjects.length === 0} className="h-10 rounded-[8px] bg-orange px-4 text-[13px] font-semibold text-white disabled:opacity-50 sm:col-span-2">
-                    {busy === "upload" ? "Đang upload..." : "Upload và đưa vào xử lý"}
+                    {busy === "upload" ? "Đang trích xuất và lập chỉ mục..." : "Upload và lập chỉ mục"}
                   </button>
                 </form>
               </section>
@@ -383,7 +392,7 @@ export function AdminConsole() {
 
             <section className="rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
               <div className="flex items-center justify-between gap-3">
-                <SectionTitle icon={<Database size={18} />} title="Tài liệu đã tải" subtitle="Theo dõi trạng thái convert, slide và vector indexing." />
+                <SectionTitle icon={<Database size={18} />} title="Tài liệu đã tải" subtitle="Theo dõi trạng thái trích text, slide và vector indexing." />
                 <button type="button" onClick={() => void refresh()} aria-label="Làm mới" className="grid h-9 w-9 place-items-center rounded-[7px] border border-line text-ink-3 hover:bg-paper-2"><RefreshCw size={15} /></button>
               </div>
               <div className="mt-4 divide-y divide-line">
