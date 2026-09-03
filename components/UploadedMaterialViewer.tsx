@@ -22,10 +22,7 @@ export function UploadedMaterialViewer({ school, subject, versionId }: { school:
   const subjectHref = `/schools/${school.id}/subjects/${subject.id}`;
 
   useEffect(() => {
-    if (!user?.token) {
-      setError("Bạn cần đăng nhập để xem giáo trình này.");
-      return;
-    }
+    if (!user?.token) return;
     const controller = new AbortController();
     void fetch(`${API_BASE_URL}/Materials/${versionId}/slides`, {
       headers: { Authorization: `Bearer ${user.token}` },
@@ -60,6 +57,7 @@ export function UploadedMaterialViewer({ school, subject, versionId }: { school:
   };
 
   const slide = payload?.slides[index];
+  const displayError = user?.token ? error : "Bạn cần đăng nhập để xem giáo trình này.";
   return (
     <main className="mx-auto max-w-[900px] px-5 pb-20 lg:px-8">
       <nav className="flex flex-wrap items-center gap-1.5 py-5 text-[13px] text-ink-3">
@@ -67,8 +65,8 @@ export function UploadedMaterialViewer({ school, subject, versionId }: { school:
       </nav>
       <Link href={subjectHref} className="inline-flex items-center gap-1.5 text-[13.5px] font-medium text-ink-2 hover:text-ink"><ArrowLeft size={15} /> Quay lại {subject.name}</Link>
 
-      {error && <p className="mt-4 rounded-[8px] border border-danger/25 bg-danger-soft px-4 py-3 text-[13px] text-danger">{error}</p>}
-      {!payload && !error && <p className="mt-8 text-[13px] text-ink-3">Đang tải giáo trình...</p>}
+      {displayError && <p className="mt-4 rounded-[8px] border border-danger/25 bg-danger-soft px-4 py-3 text-[13px] text-danger">{displayError}</p>}
+      {!payload && !displayError && <p className="mt-8 text-[13px] text-ink-3">Đang tải giáo trình...</p>}
       {payload && (
         <>
           <header className="mt-3 flex flex-wrap items-start justify-between gap-4 rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">

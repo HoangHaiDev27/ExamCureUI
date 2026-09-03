@@ -65,11 +65,7 @@ export function SubjectDetail({
   }, [user, school.id, subject.code, router]);
 
   useEffect(() => {
-    if (!user?.token) {
-      setUploadedMaterials([]);
-      setMaterialsError("Đăng nhập để xem giáo trình do admin đăng.");
-      return;
-    }
+    if (!user?.token) return;
     const controller = new AbortController();
     const query = new URLSearchParams({ schoolCode: school.id, subjectCode: subject.code });
     void fetch(`${API_BASE_URL}/Materials?${query}`, {
@@ -102,7 +98,8 @@ export function SubjectDetail({
     return () => controller.abort();
   }, [user?.token, school.id, subject.code]);
 
-  const courseMaterials = uploadedMaterials || [];
+  const courseMaterials = user?.token ? uploadedMaterials || [] : [];
+  const materialsMessage = user?.token ? materialsError : "Đăng nhập để xem giáo trình do admin đăng.";
 
   const grade = subject.lastScore != null ? classify(subject.lastScore) : null;
   const firstExamHref = `/exam/${school.id}/${subject.id}`;
@@ -199,7 +196,7 @@ export function SubjectDetail({
         </div>
         {uploadedMaterials?.length === 0 && (
           <p className="mt-5 rounded-[8px] border border-dashed border-line-strong bg-paper px-4 py-3 text-[13px] text-ink-3">
-            {materialsError || "Môn học này chưa có giáo trình được admin xuất bản."}
+            {materialsMessage || "Môn học này chưa có giáo trình được admin xuất bản."}
           </p>
         )}
       </section>

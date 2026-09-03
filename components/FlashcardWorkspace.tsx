@@ -238,7 +238,7 @@ export function FlashcardWorkspace() {
               }}
               className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[8px] border border-line bg-paper px-3 text-[13px] font-semibold text-ink-2 transition-colors hover:bg-paper-2 hover:text-ink sm:text-[14px]"
             >
-              <XCircle size={17} className="text-red" aria-hidden="true" /> Cần học lại
+              <XCircle size={17} className="text-danger" aria-hidden="true" /> Cần học lại
             </button>
             <button
               type="button"
@@ -265,8 +265,9 @@ export function FlashcardWorkspace() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Thẻ ghi nhớ</h1>
+      <div className="dashboard-title">
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">Ôn tập</span>
+        <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Thẻ ghi nhớ</h1>
         <p className="mt-1 text-[15px] text-ink-2">Chọn bộ thẻ có sẵn hoặc tự tạo nội dung theo cách bạn dễ nhớ nhất.</p>
       </div>
 
@@ -364,7 +365,7 @@ export function FlashcardWorkspace() {
                       type="button"
                       onClick={() => setDraftCards((current) => current.filter((_, cardIndex) => cardIndex !== index))}
                       aria-label={`Xóa thẻ ${index + 1}`}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-[5px] text-ink-3 hover:bg-red-soft hover:text-red"
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-[5px] text-ink-3 hover:bg-danger-soft hover:text-danger"
                     >
                       <Trash2 size={14} aria-hidden="true" />
                     </button>

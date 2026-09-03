@@ -66,6 +66,14 @@ const DASHBOARD_TAB_IDS = new Set(NAV_GROUPS.flatMap((group) => group.items.map(
 
 const TREND = [6.2, 6.6, 6.4, 7.3, 7.0, 7.7, 8.1, 8.4];
 
+/** Single source of truth for the overview stat strip — also reused in the account modal. */
+const TOTAL_EXAMS_DONE = 48;
+const AVG_SCORE = 7.8;
+const SUBJECTS_IN_PROGRESS = 6;
+const RANK_PERCENTILE = 12;
+
+const capitalizeFirst = (value: string) => value.length ? value.charAt(0).toUpperCase() + value.slice(1) : value;
+
 const FPT_DASHBOARD_ACCENT = {
   "--color-orange": "#e9783a",
   "--color-orange-dark": "#b94d18",
@@ -191,7 +199,10 @@ export default function DashboardPage() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [accountModalTab, setAccountModalTab] = useState<"profile" | "settings">("profile");
   const [expandedTerms, setExpandedTerms] = useState<Set<number>>(() => new Set(Array.from({ length: 9 }, (_, index) => index + 1)));
+  const [showDailyNudge, setShowDailyNudge] = useState(true);
+  const [autoExpandTerms, setAutoExpandTerms] = useState(true);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuPanelRef = useRef<HTMLDivElement>(null);
   const user = useAuth();
@@ -207,6 +218,7 @@ export default function DashboardPage() {
   const signOut = () => {
     setIsProfileMenuOpen(false);
     setIsMobileMenuOpen(false);
+    setIsAccountModalOpen(false);
     logout();
     window.location.assign("/");
   };
@@ -232,6 +244,14 @@ export default function DashboardPage() {
       when: item.when,
     };
   });
+
+  const givenName = studentName.trim().split(/\s+/).pop() || studentName;
+  const latestAttempt = history[0];
+  const weakestSuggested = suggested.reduce<Subject | null>((weakest, s) => {
+    if (s.lastScore == null) return weakest;
+    if (!weakest || (weakest.lastScore ?? Infinity) > s.lastScore) return s;
+    return weakest;
+  }, null);
 
   // States cho Luyện câu hỏi nhanh (Quick Quiz)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -285,6 +305,41 @@ export default function DashboardPage() {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [previewingSlide]);
 
+  // Cài đặt hiển thị của người dùng — đồng bộ từ localStorage, cả khi mount lẫn khi đổi ở tab khác.
+  useEffect(() => {
+    const syncPrefsFromStorage = () => {
+      try {
+        const nudgeOff = localStorage.getItem("examcure:pref-daily-nudge") === "0";
+        setShowDailyNudge(!nudgeOff);
+        const autoExpandOff = localStorage.getItem("examcure:pref-auto-expand-terms") === "0";
+        setAutoExpandTerms(!autoExpandOff);
+        setExpandedTerms(autoExpandOff ? new Set() : new Set(Array.from({ length: 9 }, (_, index) => index + 1)));
+      } catch {
+        /* localStorage không khả dụng — giữ mặc định */
+      }
+    };
+    syncPrefsFromStorage();
+    window.addEventListener("storage", syncPrefsFromStorage);
+    return () => window.removeEventListener("storage", syncPrefsFromStorage);
+  }, []);
+
+  const toggleDailyNudge = () => {
+    setShowDailyNudge((current) => {
+      const next = !current;
+      try { localStorage.setItem("examcure:pref-daily-nudge", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  };
+
+  const toggleAutoExpandTerms = () => {
+    setAutoExpandTerms((current) => {
+      const next = !current;
+      try { localStorage.setItem("examcure:pref-auto-expand-terms", next ? "1" : "0"); } catch {}
+      setExpandedTerms(next ? new Set(Array.from({ length: 9 }, (_, index) => index + 1)) : new Set());
+      return next;
+    });
+  };
+
   const navigateToTab = (tabId: string) => {
     setActiveTab(tabId);
     setIsMobileMenuOpen(false);
@@ -316,6 +371,12 @@ export default function DashboardPage() {
       }).filter((group) => group.subjects.length > 0)
     : [];
 
+  const DIFFICULTY_TONE: Record<Subject["difficulty"], string> = {
+    "Cơ bản": "var(--color-green)",
+    "Trung bình": "#c98a06",
+    "Nâng cao": "var(--color-danger)",
+  };
+
   const renderSubjectCard = (subject: Subject) => (
     <button
       key={subject.id}
@@ -330,7 +391,10 @@ export default function DashboardPage() {
           <span className="truncate text-[11px] font-medium text-ink-3">{subject.faculty}</span>
         </div>
         <h3 className="mt-2 line-clamp-1 text-[14.5px] font-bold text-ink">{subject.name}</h3>
-        <p className="mt-1 text-[12px] text-ink-3">Độ khó: {subject.difficulty}</p>
+        <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-ink-3">
+          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: DIFFICULTY_TONE[subject.difficulty] }} aria-hidden="true" />
+          {subject.difficulty}
+        </p>
       </div>
 
       <span className="mt-4 flex items-center gap-1.5 border-t border-line pt-3 text-[12px] font-semibold text-ink-3 transition-colors group-hover:text-orange-dark">
@@ -489,7 +553,7 @@ export default function DashboardPage() {
               avatarUrl={avatarUrl}
               menuOpen={isProfileMenuOpen}
               onToggle={() => setIsProfileMenuOpen((open) => !open)}
-              onAccount={() => { setIsProfileMenuOpen(false); setIsAccountModalOpen(true); }}
+              onAccount={() => { setIsProfileMenuOpen(false); setAccountModalTab("profile"); setIsAccountModalOpen(true); }}
               onSignOut={signOut}
             />
           </div>
@@ -567,7 +631,7 @@ export default function DashboardPage() {
                 avatarUrl={avatarUrl}
                 menuOpen={isProfileMenuOpen}
                 onToggle={() => setIsProfileMenuOpen((open) => !open)}
-                onAccount={() => { setIsProfileMenuOpen(false); setIsMobileMenuOpen(false); setIsAccountModalOpen(true); }}
+                onAccount={() => { setIsProfileMenuOpen(false); setIsMobileMenuOpen(false); setAccountModalTab("profile"); setIsAccountModalOpen(true); }}
                 onSignOut={signOut}
                 trailing={<SchoolMark theme={home.theme} abbr={home.abbr} size={22} />}
               />
@@ -601,12 +665,29 @@ export default function DashboardPage() {
         {/* Overview Tab Content */}
         {activeTab === "tong-quan" && (
           <div className="dashboard-view space-y-6">
+            {/* Hero greeting */}
+            <div className="dashboard-title">
+              <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">
+                Bảng điều khiển · {home.abbr}
+              </span>
+              <h1 className="mt-1 font-display text-[27px] font-semibold leading-tight text-ink">
+                Chào {givenName}, tiếp tục ôn tập nhé
+              </h1>
+              <p className="mt-1.5 text-[14.5px] text-ink-2">
+                Vừa đạt <strong className="tnum font-semibold text-ink">{latestAttempt.score.toFixed(1)}</strong> ở{" "}
+                <span className="font-mono text-[12.5px] text-ink-3">{latestAttempt.code}</span> · {latestAttempt.when.toLowerCase()}.
+                {showDailyNudge && weakestSuggested && (
+                  <> Ưu tiên ôn thêm <strong className="text-ink">{weakestSuggested.name}</strong> — điểm gần nhất còn thấp.</>
+                )}
+              </p>
+            </div>
+
             {/* Stat strip */}
             <div id="tong-quan" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-              <Stat icon={<FileCheck2 size={18} />} value="48" label="Đề đã làm" sub="+6 tuần này" tone="ink" />
-              <Stat icon={<Target size={18} />} value="7.8" label="Điểm trung bình" sub="thang 10" tone="green" />
-              <Stat icon={<BookOpen size={18} />} value="6" label="Môn đang luyện" tone="blue" />
-              <Stat icon={<Trophy size={18} />} value="Top 12%" label="Xếp hạng" sub="cùng khóa" tone="orange" />
+              <Stat icon={<FileCheck2 size={18} />} value={String(TOTAL_EXAMS_DONE)} label="Đề đã làm" sub="+6 tuần này" tone="ink" />
+              <Stat icon={<Target size={18} />} value={AVG_SCORE.toFixed(1)} label="Điểm trung bình" sub="thang 10" tone="green" />
+              <Stat icon={<BookOpen size={18} />} value={String(SUBJECTS_IN_PROGRESS)} label="Môn đang luyện" tone="blue" />
+              <Stat icon={<Trophy size={18} />} value={`Top ${RANK_PERCENTILE}%`} label="Xếp hạng" sub="cùng khóa" tone="orange" />
             </div>
 
             {/* Chart + History grid */}
@@ -617,9 +698,17 @@ export default function DashboardPage() {
                     <h2 className="text-[15px] font-semibold text-ink">Tiến bộ điểm số</h2>
                     <p className="text-[12.5px] text-ink-3">8 lần thi thử gần nhất</p>
                   </div>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-soft px-2.5 py-1 text-[12.5px] font-medium text-green">
-                    <TrendingUp size={14} /> +2.2 điểm
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className="rounded-[4px] px-2 py-1 text-[12px] font-bold text-white"
+                      style={{ background: TONE_COLOR[classify(TREND[TREND.length - 1]).tone] }}
+                    >
+                      Xếp loại {classify(TREND[TREND.length - 1]).letter}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-green-soft px-2.5 py-1 text-[12.5px] font-medium text-green">
+                      <TrendingUp size={14} /> +2.2 điểm
+                    </span>
+                  </div>
                 </div>
                 <ProgressChart data={TREND} />
               </section>
@@ -760,8 +849,9 @@ export default function DashboardPage() {
               // Original list view
               <>
                 <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div>
-                    <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Danh mục môn học</h1>
+                  <div className="dashboard-title">
+                    <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">{home.abbr} · Ôn tập</span>
+                    <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Danh mục môn học</h1>
                     <p className="mt-1 text-[15px] text-ink-2">Tra cứu học phần và tài liệu ôn tập theo chương trình của {home.name}.</p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -904,8 +994,9 @@ export default function DashboardPage() {
         {activeTab === "tai-lieu" && (
           <div className="dashboard-view space-y-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Tài liệu ôn tập</h1>
+              <div className="dashboard-title">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">{home.abbr} · Ôn tập</span>
+                <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Tài liệu ôn tập</h1>
                 <p className="mt-1 text-[15px] text-ink-2">Giáo trình và slide đang có trong ExamCure, sắp theo từng học phần.</p>
               </div>
               <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
@@ -914,15 +1005,19 @@ export default function DashboardPage() {
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {docsList.map((doc, i) => (
+              {docsList.map((doc, i) => {
+                const typeTone = doc.type === "PDF" ? "var(--color-danger)" : doc.type === "PPTX" ? "var(--color-warning)" : "var(--color-blue)";
+                return (
                 <div key={i} className="flex items-start gap-4 rounded-[10px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] hover:border-orange transition-colors">
-                  <div className="rounded-[6px] bg-orange-soft p-3 text-orange">
+                  <div className="rounded-[6px] p-3" style={{ background: `color-mix(in srgb, ${typeTone} 12%, white)`, color: typeTone }}>
                     <FileText size={24} />
                   </div>
                   <div className="min-w-0 flex-1">
                     <span className="rounded bg-paper-2 border border-line px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-3">{doc.code}</span>
                     <h3 className="mt-1.5 truncate text-[14.5px] font-semibold text-ink" title={doc.title}>{doc.title}</h3>
-                    <p className="mt-1 text-[12px] text-ink-3">{doc.type} · {doc.size} · {doc.reads}</p>
+                    <p className="mt-1 text-[12px] text-ink-3">
+                      <span className="font-semibold" style={{ color: typeTone }}>{doc.type}</span> · {doc.size} · {doc.reads}
+                    </p>
                     <button
                       type="button"
                       onClick={() => {
@@ -938,7 +1033,8 @@ export default function DashboardPage() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -948,8 +1044,9 @@ export default function DashboardPage() {
         {/* Luyện câu hỏi nhanh Tab Content */}
         {activeTab === "trac-nghiem" && (
           <div className="dashboard-view space-y-6">
-            <div>
-              <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Luyện câu hỏi trắc nghiệm nhanh</h1>
+            <div className="dashboard-title">
+              <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">{home.abbr} · Ôn tập</span>
+              <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Luyện câu hỏi trắc nghiệm nhanh</h1>
               <p className="mt-1 text-[15px] text-ink-2">Trả lời các câu hỏi trắc nghiệm đơn lẻ có chấm điểm và giải thích tức thì.</p>
             </div>
 
@@ -970,7 +1067,7 @@ export default function DashboardPage() {
                     if (idx === quizQuestion.correct) {
                       optStyle = "border-green bg-green-soft text-green font-medium";
                     } else if (idx === selectedAnswer) {
-                      optStyle = "border-red bg-red-soft text-red";
+                      optStyle = "border-danger bg-danger-soft text-danger";
                     } else {
                       optStyle = "border-line bg-paper text-ink opacity-60";
                     }
@@ -1040,8 +1137,9 @@ export default function DashboardPage() {
         {activeTab === "so-tay-sai" && (
           <div className="dashboard-view space-y-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Sổ tay câu sai</h1>
+              <div className="dashboard-title">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">{home.abbr} · Ôn tập</span>
+                <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Sổ tay câu sai</h1>
                 <p className="mt-1 text-[15px] text-ink-2">Xem lại những câu đã làm sai và lý do để tránh lặp lại lỗi cũ.</p>
               </div>
               <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
@@ -1062,7 +1160,7 @@ export default function DashboardPage() {
                   </p>
 
                   <div className="grid gap-2 text-[13px] md:grid-cols-2">
-                    <div className="rounded-[6px] bg-red-soft p-3 text-red border border-red-soft">
+                    <div className="rounded-[6px] bg-danger-soft p-3 text-danger border border-danger-soft">
                       <span className="block text-[10.5px] font-bold uppercase tracking-wider opacity-85">Câu bạn chọn:</span>
                       <p className="mt-0.5 font-medium">{q.yourAnswer}</p>
                     </div>
@@ -1085,20 +1183,21 @@ export default function DashboardPage() {
         {/* Đề thi gợi ý Tab Content */}
         {activeTab === "de-thi" && (
           <div className="dashboard-view space-y-6">
-            <div>
-              <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Đề luyện tập</h1>
-              <p className="mt-1 text-[15px] text-ink-2">Chọn một học phần để bắt đầu bài luyện theo thời gian.</p>
+            <div className="dashboard-title">
+              <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">{home.abbr} · Thi thử</span>
+              <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Đề luyện tập</h1>
+              <p className="mt-1 text-[15px] text-ink-2">Toàn bộ học phần có đề luyện thi thử theo thời gian, mô phỏng đúng phần mềm thi của {home.abbr}.</p>
             </div>
 
             <section className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]">
               <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
                 <div>
-                  <h2 className="text-[15px] font-semibold text-ink">Học phần truy cập nhanh</h2>
-                  <p className="text-[12.5px] text-ink-3">Danh sách bài luyện của {home.abbr}</p>
+                  <h2 className="text-[15px] font-semibold text-ink">Toàn bộ học phần</h2>
+                  <p className="text-[12.5px] text-ink-3">{subjects.length} học phần có đề luyện thi</p>
                 </div>
               </div>
               <div className="divide-y divide-line">
-                {suggested.map((s) => {
+                {subjects.map((s) => {
                   const grade = s.lastScore != null ? classify(s.lastScore) : null;
                   return (
                     <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-paper-2">
@@ -1107,7 +1206,13 @@ export default function DashboardPage() {
                           <span className="rounded-[5px] border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-2">{s.code}</span>
                           <h3 className="truncate text-[14.5px] font-semibold text-ink">{s.name}</h3>
                         </div>
-                        <p className="mt-0.5 text-[12.5px] text-ink-3">{s.examCount} đề · {s.durationMin} phút · {s.difficulty}</p>
+                        <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-ink-3">
+                          {s.examCount} đề · {s.durationMin} phút
+                          <span className="inline-flex items-center gap-1">
+                            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: DIFFICULTY_TONE[s.difficulty] }} aria-hidden="true" />
+                            {s.difficulty}
+                          </span>
+                        </p>
                       </div>
                       {grade && (
                         <span className="hidden items-center gap-1.5 sm:inline-flex">
@@ -1133,8 +1238,9 @@ export default function DashboardPage() {
         {activeTab === "lich-su" && (
           <div className="dashboard-view space-y-6">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Lịch sử thi gần đây</h1>
+              <div className="dashboard-title">
+                <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">{home.abbr} · Thi thử</span>
+                <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Lịch sử thi gần đây</h1>
                 <p className="mt-1 text-[15px] text-ink-2">Kết quả thi thử và lưu trữ bài làm của bạn tại {home.name}.</p>
               </div>
               <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
@@ -1249,20 +1355,119 @@ export default function DashboardPage() {
       {isAccountModalOpen && (
         <div className="fixed inset-0 z-[70] grid place-items-center p-4" role="presentation">
           <button type="button" aria-label="Đóng thông tin tài khoản" onClick={() => setIsAccountModalOpen(false)} className="absolute inset-0 bg-ink/40 backdrop-blur-[2px]" />
-          <section role="dialog" aria-modal="true" aria-labelledby="account-modal-title" className="relative w-full max-w-md rounded-[14px] border border-line bg-paper p-6 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
-              <div><p className="text-[12px] font-semibold uppercase tracking-wide text-orange">Hồ sơ</p><h2 id="account-modal-title" className="mt-1 text-[21px] font-bold text-ink">Thông tin tài khoản</h2></div>
-              <button type="button" onClick={() => setIsAccountModalOpen(false)} aria-label="Đóng" className="grid h-9 w-9 place-items-center rounded-[7px] text-ink-3 hover:bg-paper-2 hover:text-ink"><X size={18} /></button>
+          <section role="dialog" aria-modal="true" aria-labelledby="account-modal-title" className="relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-[14px] border border-line bg-paper shadow-2xl">
+            <div className="flex items-start justify-between gap-4 p-6 pb-0">
+              <div>
+                <p className="text-[12px] font-semibold uppercase tracking-wide text-orange">Tài khoản</p>
+                <h2 id="account-modal-title" className="mt-1 text-[21px] font-bold text-ink">Thông tin tài khoản</h2>
+              </div>
+              <button type="button" onClick={() => setIsAccountModalOpen(false)} aria-label="Đóng" className="grid h-9 w-9 shrink-0 place-items-center rounded-[7px] text-ink-3 hover:bg-paper-2 hover:text-ink"><X size={18} /></button>
             </div>
-            <div className="mt-6 flex items-center gap-4 rounded-[10px] border border-line bg-paper-2 p-4">
-              <Avatar size={56} name={studentName} avatarUrl={avatarUrl} />
-              <div className="min-w-0"><p className="truncate text-[16px] font-semibold text-ink">{studentName}</p><p className="truncate text-[13px] text-ink-3">{user?.email || "Chưa có email"}</p></div>
+
+            <div className="mt-5 flex items-center gap-4 px-6">
+              <Avatar size={58} name={studentName} avatarUrl={avatarUrl} />
+              <div className="min-w-0">
+                <p className="truncate text-[17px] font-semibold text-ink">{studentName}</p>
+                <p className="truncate text-[13px] text-ink-3">{user?.email || "Chưa có email"}</p>
+              </div>
             </div>
-            <dl className="mt-5 divide-y divide-line rounded-[10px] border border-line px-4">
-              <div className="flex items-center justify-between gap-4 py-3"><dt className="text-[13px] text-ink-3">Mã sinh viên</dt><dd className="text-right text-[13px] font-semibold text-ink">{mssv}</dd></div>
-              <div className="flex items-center justify-between gap-4 py-3"><dt className="text-[13px] text-ink-3">Trường</dt><dd className="text-right text-[13px] font-semibold text-ink">{home.name}</dd></div>
-              <div className="flex items-center justify-between gap-4 py-3"><dt className="text-[13px] text-ink-3">Vai trò</dt><dd className="text-right text-[13px] font-semibold capitalize text-ink">{user?.role || "student"}</dd></div>
-            </dl>
+
+            <div className="mt-5 flex gap-5 border-b border-line px-6" role="tablist" aria-label="Mục tài khoản">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={accountModalTab === "profile"}
+                onClick={() => setAccountModalTab("profile")}
+                className={`-mb-px border-b-2 pb-3 text-[13.5px] font-semibold transition-colors ${accountModalTab === "profile" ? "border-orange text-orange-dark" : "border-transparent text-ink-3 hover:text-ink"}`}
+              >
+                Hồ sơ
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={accountModalTab === "settings"}
+                onClick={() => setAccountModalTab("settings")}
+                className={`-mb-px border-b-2 pb-3 text-[13.5px] font-semibold transition-colors ${accountModalTab === "settings" ? "border-orange text-orange-dark" : "border-transparent text-ink-3 hover:text-ink"}`}
+              >
+                Cài đặt
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              {accountModalTab === "profile" ? (
+                <div className="space-y-5">
+                  <dl className="divide-y divide-line rounded-[10px] border border-line px-4">
+                    {[
+                      ["Mã sinh viên", mssv],
+                      ["Trường", home.name],
+                      ["Khối ngành", home.field],
+                      ["Khu vực", home.city],
+                      ["Vai trò", capitalizeFirst(user?.role || "student")],
+                      ["Phần mềm thi mô phỏng", home.theme.systemName],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex items-center justify-between gap-4 py-3">
+                        <dt className="text-[13px] text-ink-3">{label}</dt>
+                        <dd className="truncate text-right text-[13px] font-semibold text-ink">{value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+
+                  <div>
+                    <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">Tổng quan học tập</p>
+                    <div className="grid grid-cols-3 gap-2.5">
+                      <div className="rounded-[9px] border border-line bg-paper-2 p-3 text-center">
+                        <p className="tnum font-display text-[19px] font-semibold text-green">{AVG_SCORE.toFixed(1)}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-3">Điểm TB</p>
+                      </div>
+                      <div className="rounded-[9px] border border-line bg-paper-2 p-3 text-center">
+                        <p className="tnum font-display text-[19px] font-semibold text-ink">{TOTAL_EXAMS_DONE}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-3">Đề đã làm</p>
+                      </div>
+                      <div className="rounded-[9px] border border-line bg-paper-2 p-3 text-center">
+                        <p className="tnum font-display text-[19px] font-semibold text-blue">{SUBJECTS_IN_PROGRESS}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-3">Môn đang luyện</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <SettingToggle
+                      label="Nhắc ôn tập trên bảng điều khiển"
+                      description="Hiển thị gợi ý môn cần ôn thêm ở đầu tab Tổng quan."
+                      checked={showDailyNudge}
+                      onChange={toggleDailyNudge}
+                    />
+                    <SettingToggle
+                      label="Tự động mở tất cả kỳ học"
+                      description="Mở sẵn toàn bộ 9 kỳ khi vào Danh mục môn học, thay vì thu gọn."
+                      checked={autoExpandTerms}
+                      onChange={toggleAutoExpandTerms}
+                    />
+                  </div>
+
+                  <div className="space-y-2 border-t border-line pt-4">
+                    <Link
+                      href="/quen-mat-khau"
+                      onClick={() => setIsAccountModalOpen(false)}
+                      className="flex items-center justify-between rounded-[8px] border border-line px-3.5 py-3 text-[13.5px] font-medium text-ink-2 transition-colors hover:border-orange-border hover:bg-orange-soft/30 hover:text-orange-dark"
+                    >
+                      Đổi mật khẩu
+                      <ChevronRight size={16} aria-hidden="true" />
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={signOut}
+                      className="flex w-full items-center justify-between rounded-[8px] border border-line px-3.5 py-3 text-[13.5px] font-medium text-danger transition-colors hover:bg-danger-soft"
+                    >
+                      Đăng xuất khỏi thiết bị này
+                      <LogOut size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </section>
         </div>
       )}
@@ -1321,6 +1526,37 @@ function Avatar({ size = 36, name = "Student", avatarUrl }: { size?: number; nam
   );
 }
 
+function SettingToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-[9px] border border-line bg-paper-2 px-3.5 py-3">
+      <div className="min-w-0">
+        <p className="text-[13.5px] font-semibold text-ink">{label}</p>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">{description}</p>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={onChange}
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 ${checked ? "bg-orange" : "bg-line-strong"}`}
+      >
+        <span className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[22px]" : "translate-x-[3px]"}`} />
+      </button>
+    </div>
+  );
+}
+
 function Stat({
   icon,
   value,
@@ -1343,24 +1579,33 @@ function Stat({
           ? "var(--color-orange)"
           : "var(--color-ink)";
   return (
-    <div className="dashboard-metric group rounded-[12px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-orange-border hover:shadow-[var(--shadow-2)]">
+    <div className="dashboard-metric group relative overflow-hidden rounded-[12px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-orange-border hover:shadow-[var(--shadow-2)]">
+      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: color, opacity: 0.5 }} aria-hidden="true" />
       <div className="flex items-start justify-between gap-3">
         <span className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] bg-paper-2 transition-colors group-hover:bg-orange-soft" style={{ color }}>{icon}</span>
         {sub && <span className="text-right text-[10.5px] font-medium text-ink-3">{sub}</span>}
       </div>
-      <p className="tnum mt-3 text-[25px] font-semibold leading-none" style={{ color }}>
+      <p className="tnum mt-3 font-display text-[28px] font-semibold leading-none" style={{ color }}>
         {value}
       </p>
-      <p className="mt-1 text-[13px] font-medium text-ink-2">{label}</p>
+      <p className="mt-1.5 text-[13px] font-medium text-ink-2">{label}</p>
     </div>
   );
 }
 
-/** SVG line chart — uses active school theme colors (dynamic). */
+/** Grade bands, aligned to classify() thresholds in lib/grade.ts — the chart background doubles as a scoresheet. */
+const CHART_GRADE_BANDS = [
+  { from: 4, to: 5, tone: "var(--color-danger)", label: "D · Yếu" },
+  { from: 5, to: 7, tone: "#c98a06", label: "C · TB" },
+  { from: 7, to: 8, tone: "var(--color-blue)", label: "B · Khá" },
+  { from: 8, to: 10, tone: "var(--color-green)", label: "A · Giỏi" },
+];
+
+/** SVG line chart — trend line in brand accent, plotted over the student's own grade bands. */
 function ProgressChart({ data }: { data: number[] }) {
   const W = 560;
-  const H = 180;
-  const pad = { l: 28, r: 12, t: 14, b: 24 };
+  const H = 188;
+  const pad = { l: 30, r: 54, t: 14, b: 24 };
   const min = 4;
   const max = 10;
   const innerW = W - pad.l - pad.r;
@@ -1371,16 +1616,40 @@ function ProgressChart({ data }: { data: number[] }) {
 
   const linePts = data.map((v, i) => `${x(i)},${y(v)}`).join(" ");
   const areaPts = `${pad.l},${pad.t + innerH} ${linePts} ${pad.l + innerW},${pad.t + innerH}`;
-  const gridYs = [4, 6, 8, 10];
+  const gridYs = [4, 5, 7, 8, 10];
 
   return (
     <div className="mt-3 overflow-hidden">
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" preserveAspectRatio="xMidYMid meet">
+        {CHART_GRADE_BANDS.map((band) => (
+          <rect
+            key={band.label}
+            x={pad.l}
+            y={y(band.to)}
+            width={innerW}
+            height={y(band.from) - y(band.to)}
+            fill={band.tone}
+            opacity={0.06}
+          />
+        ))}
         {gridYs.map((g) => (
           <g key={g}>
             <line x1={pad.l} x2={W - pad.r} y1={y(g)} y2={y(g)} stroke="var(--color-line)" strokeWidth="1" />
             <text x={4} y={y(g) + 4} fontSize="11" fill="var(--color-ink-3)" className="tnum">{g}</text>
           </g>
+        ))}
+        {CHART_GRADE_BANDS.map((band) => (
+          <text
+            key={`label-${band.label}`}
+            x={W - pad.r + 8}
+            y={(y(band.from) + y(band.to)) / 2 + 3.5}
+            fontSize="10"
+            fontWeight="600"
+            fill={band.tone}
+            opacity={0.75}
+          >
+            {band.label}
+          </text>
         ))}
         <polygon points={areaPts} fill="var(--color-orange-soft)" opacity="0.6" />
         <polyline points={linePts} fill="none" stroke="var(--color-orange)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -1392,7 +1661,7 @@ function ProgressChart({ data }: { data: number[] }) {
             </text>
           </g>
         ))}
-        <text x={x(data.length - 1)} y={y(data[data.length - 1]) - 12} fontSize="12" fontWeight="600" textAnchor="middle" fill="var(--color-orange)" className="tnum">
+        <text x={x(data.length - 1) - 10} y={y(data[data.length - 1]) - 10} fontSize="12" fontWeight="600" textAnchor="end" fill="var(--color-orange)" className="tnum">
           {data[data.length - 1].toFixed(1)}
         </text>
       </svg>
