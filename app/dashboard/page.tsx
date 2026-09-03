@@ -407,8 +407,8 @@ export default function DashboardPage() {
       style={schoolId === "fptu" ? FPT_DASHBOARD_ACCENT : undefined}
     >
       {/* Sidebar */}
-      <aside className="dashboard-sidebar hidden w-[268px] flex-none border-r border-line bg-paper lg:block">
-        <div className="sticky top-0 flex h-screen flex-col justify-between p-6">
+      <aside className="dashboard-sidebar hidden h-[100dvh] w-[268px] flex-none overflow-y-auto overscroll-contain border-r border-line bg-paper lg:block">
+        <div className="flex min-h-full flex-col justify-between p-6">
           <div>
             {/* Logo and site title */}
             <div className="border-b border-line px-3 pb-5">
