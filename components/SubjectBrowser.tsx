@@ -4,11 +4,16 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowUpRight,
   BookOpen,
   CalendarDays,
   ChevronRight,
   Clock,
   FileText,
+  GraduationCap,
+  Layers3,
+  MessageSquareText,
+  MessagesSquare,
   Search,
 } from "lucide-react";
 import type { Difficulty, School, Subject } from "@/lib/types";
@@ -19,6 +24,26 @@ const DIFF_STYLE: Record<Difficulty, string> = {
   "Cơ bản": "border-green text-green bg-green-soft",
   "Trung bình": "border-blue text-blue-dark bg-blue-soft",
   "Nâng cao": "border-orange-border text-orange-dark bg-orange-soft",
+};
+
+const FPT_TERM_ACTIVITY: Record<number, {
+  topics: string;
+  posts: string;
+  latest: string;
+  time: string;
+  author: string;
+  avatar: string;
+  avatarColor: string;
+}> = {
+  1: { topics: "482", posts: "844", latest: "MED201c · SU26 · RE", time: "23/8/26", author: "Hương Mai", avatar: "H", avatarColor: "#f59e0b" },
+  2: { topics: "562", posts: "889", latest: "PRN212 · SU26 · B1 · PE", time: "24/8/26", author: "twoduck", avatar: "T", avatarColor: "#0ea5e9" },
+  3: { topics: "541", posts: "1.5K", latest: "WED201c · SU26 · RE", time: "23/8/26", author: "Nezuko94", avatar: "N", avatarColor: "#8b5cf6" },
+  4: { topics: "532", posts: "1.4K", latest: "SWE201c · SU26 · RE", time: "24/8/26", author: "minhha289", avatar: "M", avatarColor: "#64748b" },
+  5: { topics: "607", posts: "1.2K", latest: "ITE302c · SU26 · RE", time: "23/8/26", author: "minhha289", avatar: "M", avatarColor: "#64748b" },
+  6: { topics: "83", posts: "174", latest: "ENW492c · SU26 · RE · R", time: "Thứ ba lúc 11:31", author: "phongmnse170341", avatar: "P", avatarColor: "#475569" },
+  7: { topics: "274", posts: "890", latest: "WDU202c · SU26 · RE", time: "23/8/26", author: "Hương Mai", avatar: "H", avatarColor: "#f59e0b" },
+  8: { topics: "276", posts: "2K", latest: "WDU203c · SU26 · RE", time: "23/8/26", author: "minhha289", avatar: "M", avatarColor: "#64748b" },
+  9: { topics: "145", posts: "1.3K", latest: "HCM202 · SU26 · C1FE", time: "Hôm qua, lúc 06:16", author: "Ericpham04", avatar: "P", avatarColor: "#0f9fad" },
 };
 
 const norm = (s: string) =>
@@ -44,6 +69,8 @@ export function SubjectBrowser({
   const [query, setQuery] = useState("");
   const [diff, setDiff] = useState<string | null>(null);
   const [faculty, setFaculty] = useState<string | null>(null);
+  const [term, setTerm] = useState<number | null>(null);
+  const isFpt = school.id === "fptu";
 
   const faculties = useMemo(
     () => Array.from(new Set(subjects.map((s) => s.faculty))),
@@ -55,10 +82,22 @@ export function SubjectBrowser({
     return subjects.filter((s) => {
       if (diff && s.difficulty !== diff) return false;
       if (faculty && s.faculty !== faculty) return false;
+      if (term && s.semester !== `Kỳ ${term}`) return false;
       if (!q) return true;
       return norm(s.name).includes(q) || norm(s.code).includes(q);
     });
-  }, [subjects, query, diff, faculty]);
+  }, [subjects, query, diff, faculty, term]);
+
+  const fptGroups = useMemo(() => {
+    if (!isFpt) return [];
+    return Array.from({ length: 9 }, (_, index) => {
+      const number = index + 1;
+      return {
+        number,
+        subjects: filtered.filter((subject) => subject.semester === `Kỳ ${number}`),
+      };
+    }).filter((group) => group.subjects.length > 0);
+  }, [filtered, isFpt]);
 
   return (
     <main className="mx-auto max-w-[1180px] px-5 pb-16 lg:px-8">
@@ -77,11 +116,14 @@ export function SubjectBrowser({
             Bước 2 / 2 · Chọn học phần
           </span>
           <h1 className="mt-3 font-display text-[30px] font-semibold leading-tight text-ink sm:text-[36px]">
-            Học phần đang mở thi thử
+            {isFpt ? "Danh mục môn học Đại học FPT" : "Học phần đang mở thi thử"}
           </h1>
           <p className="mt-1.5 text-[15px] text-ink-2">
-            Chọn học phần để xem tài liệu ôn tập và vào phòng thi mô phỏng{" "}
-            <span className="font-medium text-ink">{school.theme.systemName}</span>.
+            {isFpt ? (
+              <>Tra cứu đầy đủ môn học theo 9 kỳ, xem tài liệu và luyện thi trên <span className="font-medium text-ink">{school.theme.systemName}</span>.</>
+            ) : (
+              <>Chọn học phần để xem tài liệu ôn tập và vào phòng thi mô phỏng <span className="font-medium text-ink">{school.theme.systemName}</span>.</>
+            )}
           </p>
         </div>
         <div className="flex gap-6 rounded-[8px] border border-line bg-paper px-5 py-3 shadow-[var(--shadow-1)]">
@@ -91,9 +133,9 @@ export function SubjectBrowser({
           </div>
           <div className="border-l border-line pl-6">
             <p className="tnum text-[22px] font-semibold leading-none text-orange">
-              {subjects.reduce((a, s) => a + s.examCount, 0)}
+              {isFpt ? 9 : subjects.reduce((a, s) => a + s.examCount, 0)}
             </p>
-            <p className="text-[12px] text-ink-2">đề thi</p>
+            <p className="text-[12px] text-ink-2">{isFpt ? "kỳ học" : "đề thi"}</p>
           </div>
         </div>
       </div>
@@ -109,25 +151,49 @@ export function SubjectBrowser({
             className="h-11 w-full rounded-[7px] border border-line bg-paper pl-11 pr-4 text-[15px] outline-none transition-colors placeholder:text-ink-3 focus:border-orange"
           />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <FilterChip active={!diff && !faculty} onClick={() => { setDiff(null); setFaculty(null); }}>
-            Tất cả
-          </FilterChip>
-          {(["Cơ bản", "Trung bình", "Nâng cao"] as Difficulty[]).map((d) => (
-            <FilterChip key={d} active={diff === d} onClick={() => setDiff(diff === d ? null : d)}>
-              {d}
+        {isFpt ? (
+          <div className="flex flex-col gap-2.5">
+            <div className="flex flex-wrap gap-2" aria-label="Lọc theo kỳ">
+              <FilterChip active={!term} onClick={() => setTerm(null)}>Tất cả 9 kỳ</FilterChip>
+              {Array.from({ length: 9 }, (_, index) => index + 1).map((number) => (
+                <FilterChip key={number} active={term === number} onClick={() => setTerm(term === number ? null : number)}>
+                  Kỳ {number}
+                </FilterChip>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-2" aria-label="Lọc theo nhóm môn">
+              <span className="mr-1 self-center text-[12px] font-semibold uppercase tracking-[0.08em] text-ink-3">Nhóm môn</span>
+              {faculties.map((f) => (
+                <FilterChip key={f} active={faculty === f} onClick={() => setFaculty(faculty === f ? null : f)}>
+                  {f}
+                </FilterChip>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            <FilterChip active={!diff && !faculty} onClick={() => { setDiff(null); setFaculty(null); }}>
+              Tất cả
             </FilterChip>
-          ))}
-          <span className="mx-1 self-center text-line-strong">|</span>
-          {faculties.map((f) => (
-            <FilterChip key={f} active={faculty === f} onClick={() => setFaculty(faculty === f ? null : f)}>
-              {f}
-            </FilterChip>
-          ))}
-        </div>
+            {(["Cơ bản", "Trung bình", "Nâng cao"] as Difficulty[]).map((d) => (
+              <FilterChip key={d} active={diff === d} onClick={() => setDiff(diff === d ? null : d)}>
+                {d}
+              </FilterChip>
+            ))}
+            <span className="mx-1 self-center text-line-strong">|</span>
+            {faculties.map((f) => (
+              <FilterChip key={f} active={faculty === f} onClick={() => setFaculty(faculty === f ? null : f)}>
+                {f}
+              </FilterChip>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Table */}
+      {isFpt ? (
+        <FptSubjectDirectory school={school} groups={fptGroups} resultCount={filtered.length} />
+      ) : (
+      /* Table */
       <div className="mt-5 overflow-hidden rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]">
         {/* Column header — desktop */}
         <div className="hidden grid-cols-[1fr_84px_110px_120px_120px_150px] gap-4 border-b border-line bg-paper-2 px-5 py-2.5 text-[12px] font-semibold uppercase tracking-wide text-ink-3 lg:grid">
@@ -150,7 +216,147 @@ export function SubjectBrowser({
           <SubjectRow key={s.id} school={school} subject={s} />
         ))}
       </div>
+      )}
     </main>
+  );
+}
+
+function FptSubjectDirectory({
+  school,
+  groups,
+  resultCount,
+}: {
+  school: School;
+  groups: { number: number; subjects: Subject[] }[];
+  resultCount: number;
+}) {
+  if (resultCount === 0) {
+    return (
+      <div className="mt-5 rounded-[10px] border border-line bg-paper px-5 py-16 text-center shadow-[var(--shadow-1)]">
+        <p className="text-[15px] font-medium text-ink">Không có môn học phù hợp</p>
+        <p className="mt-1 text-[14px] text-ink-2">Thử chọn kỳ khác hoặc tìm bằng mã môn ngắn hơn.</p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="mt-5" aria-label="Danh mục môn học FPT theo kỳ">
+      <div className="mb-3 flex items-center justify-between gap-4 text-[13px] text-ink-2">
+        <span className="inline-flex items-center gap-1.5">
+          <Layers3 size={15} className="text-orange" />
+          Đang hiển thị <strong className="tnum text-ink">{resultCount}</strong> môn học
+        </span>
+        <span className="hidden text-ink-3 sm:inline">Chọn mã môn để mở kho ôn tập</span>
+      </div>
+
+      <div className="space-y-6">
+        {groups.map((group) => (
+          <article
+            key={group.number}
+            aria-labelledby={`fpt-term-${group.number}`}
+            className="overflow-hidden rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]"
+          >
+            <header className="flex items-center gap-3 border-b border-line bg-paper-2 px-4 py-4 sm:px-5">
+              <span
+                className="tnum inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] text-[19px] font-bold text-white shadow-[0_3px_10px_rgba(243,112,33,0.2)]"
+                style={{ background: school.theme.brand }}
+                aria-hidden="true"
+              >
+                {group.number}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-orange-dark">Học kỳ</p>
+                <h2 id={`fpt-term-${group.number}`} className="font-display text-[22px] font-semibold leading-tight text-ink sm:text-[24px]">
+                  Kỳ {group.number}
+                </h2>
+              </div>
+              <div className="ml-auto flex items-center gap-2 rounded-[6px] border border-line bg-paper px-2.5 py-1.5 text-[12.5px] text-ink-2">
+                <GraduationCap size={15} className="text-ink-3" aria-hidden="true" />
+                <strong className="tnum font-semibold text-ink">{group.subjects.length}</strong> môn học
+              </div>
+            </header>
+
+            <FptTermActivity term={group.number} />
+            <div className="grid gap-px bg-line sm:grid-cols-2 xl:grid-cols-3">
+              {group.subjects.map((subject) => (
+                <FptSubjectLink key={subject.id} school={school} subject={subject} />
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FptTermActivity({ term }: { term: number }) {
+  const activity = FPT_TERM_ACTIVITY[term];
+
+  return (
+    <div className="grid grid-cols-2 border-b border-line bg-[#fbfcfe] sm:grid-cols-[100px_100px_1fr]">
+      <div className="flex items-center gap-2 border-r border-line px-3 py-3 sm:px-4">
+        <MessageSquareText size={15} className="shrink-0 text-ink-3" aria-hidden="true" />
+        <span>
+          <span className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">Chủ đề</span>
+          <strong className="tnum block text-[14px] leading-tight text-orange-dark">{activity.topics}</strong>
+        </span>
+      </div>
+      <div className="flex items-center gap-2 px-3 py-3 sm:border-r sm:border-line sm:px-4">
+        <MessagesSquare size={15} className="shrink-0 text-ink-3" aria-hidden="true" />
+        <span>
+          <span className="block text-[10px] font-semibold uppercase tracking-[0.08em] text-ink-3">Bài viết</span>
+          <strong className="tnum block text-[14px] leading-tight text-orange-dark">{activity.posts}</strong>
+        </span>
+      </div>
+      <Link
+        href="/dien-dan"
+        className="group col-span-2 flex min-w-0 items-center gap-2.5 border-t border-line px-3 py-2.5 transition-colors hover:bg-orange-soft sm:col-span-1 sm:border-t-0 sm:px-4"
+        aria-label={`Bài viết mới nhất kỳ ${term}: ${activity.latest}`}
+      >
+        <span
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-bold text-white"
+          style={{ background: activity.avatarColor }}
+          aria-hidden="true"
+        >
+          {activity.avatar}
+        </span>
+        <span className="min-w-0 leading-tight">
+          <span className="flex items-center gap-1.5">
+            <span className="shrink-0 rounded-[4px] bg-danger px-1.5 py-0.5 text-[9px] font-bold uppercase text-white">Đề thi FE</span>
+            <span className="truncate text-[12.5px] font-semibold text-ink-2 group-hover:text-orange-dark">{activity.latest}</span>
+          </span>
+          <span className="mt-1 block truncate text-[11.5px] text-ink-3">
+            {activity.time} · <strong className="font-semibold text-ink-2">{activity.author}</strong>
+          </span>
+        </span>
+        <ArrowUpRight size={14} className="ml-auto shrink-0 text-ink-3 group-hover:text-orange" aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
+function FptSubjectLink({ school, subject }: { school: School; subject: Subject }) {
+  const hasKnownName = !subject.name.startsWith("Học phần ");
+
+  return (
+    <Link
+      href={`/schools/${school.id}/subjects/${subject.id}`}
+      className="group flex min-h-[72px] items-center justify-between gap-3 bg-paper px-4 py-3 transition-colors hover:bg-orange-soft"
+      title={`${subject.code} · ${subject.name}`}
+    >
+      <span className="min-w-0">
+        <span className="flex items-center gap-2">
+          <span className="font-mono text-[14px] font-bold tracking-[0.02em] text-orange-dark">{subject.code}</span>
+          <span className="tnum rounded-[4px] bg-paper-3 px-1.5 py-0.5 text-[10.5px] font-semibold text-ink-3">
+            {subject.examCount} đề
+          </span>
+        </span>
+        <span className="mt-0.5 block truncate text-[12.5px] text-ink-2">
+          {hasKnownName ? subject.name : subject.faculty}
+        </span>
+      </span>
+      <ArrowUpRight size={16} className="shrink-0 text-ink-3 transition-[color,transform] group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-orange" />
+    </Link>
   );
 }
 

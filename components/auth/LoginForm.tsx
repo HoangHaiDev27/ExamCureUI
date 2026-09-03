@@ -9,7 +9,13 @@ import { TextField, PasswordField, SubmitButton } from "./Fields";
 import { login, loginAPI } from "@/lib/auth";
 import { STUDENT } from "@/lib/student";
 
-export function LoginForm() {
+export function LoginForm({
+  redirectTo,
+  onSuccess,
+}: {
+  redirectTo?: string;
+  onSuccess?: () => void;
+} = {}) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,7 +47,8 @@ export function LoginForm() {
           role: data.role,
           schoolId: data.schoolId || "fptu",
         });
-        router.push("/");
+        onSuccess?.();
+        router.push(redirectTo ?? "/");
       } catch (error) {
         const err = error as Error;
         setErrors({ ...er, password: err.message });
@@ -53,7 +60,11 @@ export function LoginForm() {
 
   return (
     <form onSubmit={submit} noValidate>
-      <SocialAuth verb="Đăng nhập" />
+      <SocialAuth
+        verb="Đăng nhập"
+        redirectTo={redirectTo}
+        onSuccess={onSuccess}
+      />
       <div className="space-y-4">
         <TextField
           label="Email"

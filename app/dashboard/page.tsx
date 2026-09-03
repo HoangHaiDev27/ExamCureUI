@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import {
-  BarChart3,
   BookOpen,
   FileCheck2,
   History,
@@ -15,14 +14,14 @@ import {
   FileText,
   Layers,
   HelpCircle,
-  CheckCircle2,
-  XCircle,
-  RotateCw,
   ArrowLeft,
-  Download,
+  ArrowUpRight,
   Eye,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
+  Menu,
+  Search,
   X,
 } from "lucide-react";
 import { getSchool } from "@/lib/schools";
@@ -30,6 +29,7 @@ import { getSubjects } from "@/lib/subjects";
 import type { Subject } from "@/lib/types";
 import { SchoolMark } from "@/components/SchoolMark";
 import { Logo } from "@/components/Logo";
+import { FlashcardWorkspace } from "@/components/FlashcardWorkspace";
 import { STUDENT, mssvFor } from "@/lib/student";
 import { classify, TONE_COLOR } from "@/lib/grade";
 import { useAuth, initials } from "@/lib/auth";
@@ -39,14 +39,14 @@ const NAV_GROUPS = [
     title: "Tổng quan",
     items: [
       { id: "tong-quan", label: "Bảng điều khiển", icon: LayoutDashboard },
-      { id: "mon-hoc", label: "Môn học của tôi", icon: BookOpen }
+      { id: "mon-hoc", label: "Danh mục môn học", icon: BookOpen }
     ]
   },
   {
     title: "Ôn tập",
     items: [
       { id: "tai-lieu", label: "Đọc tài liệu", icon: FileText },
-      { id: "flashcards", label: "Thẻ ghi nhớ (Quizlet)", icon: Layers },
+      { id: "flashcards", label: "Thẻ ghi nhớ", icon: Layers },
       { id: "trac-nghiem", label: "Luyện câu hỏi nhanh", icon: HelpCircle },
       { id: "so-tay-sai", label: "Sổ tay sửa sai", icon: BookOpen }
     ]
@@ -55,13 +55,27 @@ const NAV_GROUPS = [
     title: "Thi thử",
     items: [
       { id: "de-thi", label: "Đề thi gợi ý", icon: FileCheck2 },
-      { id: "lich-su", label: "Lịch sử thi", icon: History },
-      { id: "thong-ke", label: "Thống kê & Tiến độ", icon: BarChart3 }
+      { id: "lich-su", label: "Lịch sử thi", icon: History }
     ]
   }
 ];
 
+const DASHBOARD_TAB_IDS = new Set(NAV_GROUPS.flatMap((group) => group.items.map((item) => item.id)));
+
 const TREND = [6.2, 6.6, 6.4, 7.3, 7.0, 7.7, 8.1, 8.4];
+
+const FPT_DASHBOARD_ACCENT = {
+  "--color-orange": "#e9783a",
+  "--color-orange-dark": "#b94d18",
+  "--color-orange-soft": "#fff3eb",
+  "--color-orange-border": "#f2c5aa",
+  "--color-paper-2": "#f8f6f3",
+  "--color-paper-3": "#f1ede8",
+  "--color-line": "#e8e2dc",
+  "--color-line-strong": "#d8d0c8",
+  "--shadow-1": "0 1px 2px rgba(34, 28, 23, 0.05), 0 4px 14px rgba(34, 28, 23, 0.035)",
+  "--shadow-2": "0 12px 32px rgba(34, 28, 23, 0.09), 0 2px 6px rgba(34, 28, 23, 0.05)",
+} as CSSProperties;
 
 const CHAPTERS_DATA: Record<string, { title: string; slides: string[] }[]> = {
   default: [
@@ -70,7 +84,7 @@ const CHAPTERS_DATA: Record<string, { title: string; slides: string[] }[]> = {
       slides: [
         "Slide 1: Khái niệm cơ bản và vai trò của học phần trong chuyên ngành.",
         "Slide 2: Các nội dung cốt lõi và lộ trình ôn luyện thi thử hiệu quả.",
-        "Slide 3: Các tài liệu tham khảo chính thức và cấu trúc đề thi cuối kỳ."
+        "Slide 3: Các tài liệu tham khảo chính và cấu trúc đề thi cuối kỳ."
       ]
     },
     {
@@ -172,65 +186,163 @@ const CHAPTERS_DATA: Record<string, { title: string; slides: string[] }[]> = {
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState("tong-quan");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [expandedTerms, setExpandedTerms] = useState<Set<number>>(() => new Set(Array.from({ length: 9 }, (_, index) => index + 1)));
+  const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuPanelRef = useRef<HTMLDivElement>(null);
   const user = useAuth();
   const schoolId = user?.schoolId || "fptu";
   const home = getSchool(schoolId)!;
+  const subjects = getSubjects(schoolId);
   const mssv = user ? (user.email?.split("@")[0].toUpperCase() || mssvFor(schoolId)) : mssvFor(schoolId);
-  const suggested = getSubjects(schoolId).slice(0, 5);
+  const suggested = subjects.slice(0, 5);
 
   const studentName = user?.name || STUDENT.name;
-  const studentShortName = user ? (user.name.trim().split(/\s+/).pop() || "Bạn") : STUDENT.shortName;
 
-  const subjects = getSubjects(schoolId);
-  const history = [
-    { code: subjects[0]?.code || "CSD201", name: subjects[0]?.name || "Cấu trúc dữ liệu", score: 8.4, when: "Hôm nay, 09:42" },
-    { code: subjects[1]?.code || "DBI202", name: subjects[1]?.name || "Cơ sở dữ liệu", score: 7.8, when: "Hôm qua, 20:15" },
-    { code: subjects[2]?.code || "PRO192", name: subjects[2]?.name || "Lập trình hướng đối tượng", score: 9.0, when: "3 ngày trước" },
-    { code: subjects[3]?.code || "MAS291", name: subjects[3]?.name || "Xác suất thống kê", score: 7.2, when: "5 ngày trước" },
+  const getMockSubject = (code: string, fallbackIndex: number) =>
+    subjects.find((subject) => subject.code.toLowerCase() === code.toLowerCase()) || subjects[fallbackIndex];
+  const historyMocks = [
+    { code: "CSD201", score: 8.4, when: "Hôm nay, 09:42" },
+    { code: "DBI202", score: 7.8, when: "Hôm qua, 20:15" },
+    { code: "PRO192", score: 9.0, when: "3 ngày trước" },
+    { code: "MAS291", score: 7.2, when: "5 ngày trước" },
+    { code: "PRF192", score: 6.8, when: "12/08/2026" },
+    { code: "MAE101", score: 8.7, when: "08/08/2026" },
+    { code: "ECO111", score: 7.5, when: "02/08/2026" },
+    { code: "WED201c", score: 9.2, when: "28/07/2026" },
   ];
-
-  // States cho Flashcards
-  const [cardIndex, setCardIndex] = useState(0);
-  const [isFlipped, setIsFlipped] = useState(false);
-  const [knowCount, setKnowCount] = useState(0);
-  const [dontKnowCount, setDontKnowCount] = useState(0);
+  const history = historyMocks.map((item, index) => {
+    const subject = getMockSubject(item.code, index);
+    return {
+      code: subject?.code || item.code,
+      name: subject?.name || `Học phần ${item.code}`,
+      score: item.score,
+      when: item.when,
+    };
+  });
 
   // States cho Luyện câu hỏi nhanh (Quick Quiz)
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
   const [quizChecked, setQuizChecked] = useState(false);
 
-  // States cho Môn học của tôi tab
+  // States cho danh mục môn học
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFaculty, setSelectedFaculty] = useState<string | null>(null);
+  const [selectedTerm, setSelectedTerm] = useState<number | null>(null);
   const [selectedSubjectForDocs, setSelectedSubjectForDocs] = useState<Subject | null>(null);
   const [previewingSlide, setPreviewingSlide] = useState<{ chapterTitle: string; slides: string[]; slideIndex: number } | null>(null);
+
+  useEffect(() => {
+    const syncTabFromUrl = () => {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab && DASHBOARD_TAB_IDS.has(tab)) setActiveTab(tab);
+    };
+
+    syncTabFromUrl();
+    window.addEventListener("popstate", syncTabFromUrl);
+    return () => window.removeEventListener("popstate", syncTabFromUrl);
+  }, []);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    mobileMenuPanelRef.current?.focus();
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMobileMenuOpen(false);
+        mobileMenuButtonRef.current?.focus();
+      }
+    };
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [isMobileMenuOpen]);
+
+  useEffect(() => {
+    if (!previewingSlide) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPreviewingSlide(null);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [previewingSlide]);
+
+  const navigateToTab = (tabId: string) => {
+    setActiveTab(tabId);
+    setIsMobileMenuOpen(false);
+    const url = new URL(window.location.href);
+    if (tabId === "tong-quan") url.searchParams.delete("tab");
+    else url.searchParams.set("tab", tabId);
+    window.history.pushState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  };
+
+  const activeTabLabel = NAV_GROUPS.flatMap((group) => group.items).find((item) => item.id === activeTab)?.label || "Bảng điều khiển";
 
   const faculties = Array.from(new Set(subjects.map((s) => s.faculty)));
   const filteredSubjects = subjects.filter((s) => {
     if (selectedFaculty && s.faculty !== selectedFaculty) return false;
+    if (schoolId === "fptu" && selectedTerm && s.semester !== `Kỳ ${selectedTerm}`) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase().trim();
       return s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q);
     }
     return true;
   });
+  const fptTermGroups = schoolId === "fptu"
+    ? Array.from({ length: 9 }, (_, index) => {
+        const term = index + 1;
+        return {
+          term,
+          subjects: filteredSubjects.filter((subject) => subject.semester === `Kỳ ${term}`),
+        };
+      }).filter((group) => group.subjects.length > 0)
+    : [];
 
-  // Mock tài liệu học tập theo từng trường
-  const docsList = [
-    { name: `Giáo trình lý thuyết ${subjects[0]?.name || "Cấu trúc dữ liệu"}`, code: subjects[0]?.code || "CSD201", type: "PDF", size: "4.8 MB", reads: "1.2k lượt đọc" },
-    { name: `Slide bài giảng Slide Chapter 3 - ${subjects[1]?.name || "Cơ sở dữ liệu"}`, code: subjects[1]?.code || "DBI202", type: "PPTX", size: "2.1 MB", reads: "850 lượt đọc" },
-    { name: `Công thức & Tóm tắt kiến thức ${subjects[2]?.name || "Giải tích 1"}`, code: subjects[2]?.code || "MAE101", type: "PDF", size: "1.5 MB", reads: "2.3k lượt đọc" },
-    { name: `Ngân hàng câu hỏi trắc nghiệm tự luyện ${subjects[3]?.name || "Kinh tế vi mô"}`, code: subjects[3]?.code || "ECO111", type: "DOCX", size: "1.1 MB", reads: "940 lượt đọc" },
-  ];
+  const renderSubjectCard = (subject: Subject) => (
+    <button
+      key={subject.id}
+      type="button"
+      onClick={() => setSelectedSubjectForDocs(subject)}
+      aria-label={`Xem giáo trình và slide môn ${subject.code} - ${subject.name}`}
+      className="group flex min-h-[132px] flex-col justify-between rounded-[10px] border border-line bg-paper p-4 text-left shadow-[var(--shadow-1)] transition-[border-color,background-color,transform] hover:-translate-y-0.5 hover:border-orange hover:bg-orange-soft/30"
+    >
+      <div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="rounded border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-2">{subject.code}</span>
+          <span className="truncate text-[11px] font-medium text-ink-3">{subject.faculty}</span>
+        </div>
+        <h3 className="mt-2 line-clamp-1 text-[14.5px] font-bold text-ink">{subject.name}</h3>
+        <p className="mt-1 text-[12px] text-ink-3">Độ khó: {subject.difficulty}</p>
+      </div>
 
-  // Flashcards danh sách mẫu
-  const sampleFlashcards = [
-    { front: "Trường hợp xấu nhất của thuật toán sắp xếp nhanh (QuickSort) có độ phức tạp là bao nhiêu?", back: "O(n^2) - xảy ra khi phần tử chốt luôn là phần tử cực đại hoặc cực tiểu (mảng đã sắp xếp sẵn)." },
-    { front: "Nguyên lý FIFO (First In First Out) tương ứng với cấu trúc dữ liệu nào?", back: "Queue (Hàng đợi) - phần tử vào trước sẽ được xử lý và lấy ra trước." },
-    { front: "Độ phức tạp trung bình của thao tác tìm kiếm, chèn, xóa trên bảng băm (Hash Table) là gì?", back: "O(1) - thời gian hằng số nhờ hàm băm phân bổ đều các khóa." },
-    { front: "Duyệt cây nhị phân tìm kiếm (BST) theo thứ tự nào sẽ cho dãy khóa có thứ tự tăng dần?", back: "In-order traversal (Duyệt trung thứ tự: Trái -> Gốc -> Phải)." },
-    { front: "Độ phức tạp bộ nhớ (Space Complexity) của thuật toán sắp xếp trộn (MergeSort) là gì?", back: "O(n) - do cần mảng phụ có cùng kích thước để trộn các mảng con." }
+      <span className="mt-4 flex items-center gap-1.5 border-t border-line pt-3 text-[12px] font-semibold text-ink-3 transition-colors group-hover:text-orange-dark">
+        <FileText size={13} aria-hidden="true" /> Giáo trình &amp; Slide
+        <ArrowUpRight size={14} className="ml-auto transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" aria-hidden="true" />
+      </span>
+    </button>
+  );
+
+  // Mock tài liệu học tập đủ dài để kiểm tra grid và responsive
+  const documentMocks = [
+    { code: "CSD201", title: "Giáo trình cấu trúc dữ liệu và giải thuật", type: "PDF", size: "4.8 MB", reads: "1.2k lượt đọc" },
+    { code: "DBI202", title: "Slide chương 3 · Chuẩn hóa cơ sở dữ liệu", type: "PPTX", size: "2.1 MB", reads: "850 lượt đọc" },
+    { code: "PRO192", title: "Tóm tắt lập trình hướng đối tượng bằng Java", type: "PDF", size: "1.5 MB", reads: "2.3k lượt đọc" },
+    { code: "MAS291", title: "Bảng công thức xác suất và thống kê", type: "PDF", size: "980 KB", reads: "1.8k lượt đọc" },
+    { code: "PRF192", title: "Bài tập con trỏ, mảng và chuỗi có lời giải", type: "DOCX", size: "3.4 MB", reads: "764 lượt đọc" },
+    { code: "MAE101", title: "Bộ bài tập đạo hàm và tích phân ôn cuối kỳ", type: "PDF", size: "6.2 MB", reads: "1.1k lượt đọc" },
+    { code: "ECO111", title: "Sơ đồ tổng hợp cung, cầu và cân bằng thị trường", type: "PDF", size: "1.7 MB", reads: "592 lượt đọc" },
+    { code: "WED201c", title: "Slide xây dựng giao diện web responsive", type: "PPTX", size: "8.9 MB", reads: "1.5k lượt đọc" },
   ];
+  const docsList = documentMocks.map((item, index) => {
+    const subject = getMockSubject(item.code, index);
+    return { ...item, code: subject?.code || item.code };
+  });
 
   // Câu hỏi trắc nghiệm nhanh mẫu
   const quizQuestion = {
@@ -248,32 +360,60 @@ export default function DashboardPage() {
   // Mock câu hỏi sai của user (Sổ tay sửa sai)
   const incorrectQuestions = [
     {
-      code: subjects[0]?.code || "CSD201",
-      subject: subjects[0]?.name || "Cấu trúc dữ liệu & Giải thuật",
+      code: getMockSubject("CSD201", 0)?.code || "CSD201",
+      subject: getMockSubject("CSD201", 0)?.name || "Cấu trúc dữ liệu & Giải thuật",
       q: "Độ phức tạp thời gian của thuật toán tìm kiếm nhị phân trên mảng đã sắp xếp kích thước n là:",
       yourAnswer: "O(n)",
       correctAnswer: "O(log n)",
       reason: "Bạn đã nhầm lẫn với tìm kiếm tuyến tính. Tìm kiếm nhị phân chia đôi không gian tìm kiếm sau mỗi bước nên độ phức tạp là O(log n)."
     },
     {
-      code: subjects[1]?.code || "DBI202",
-      subject: subjects[1]?.name || "Cơ sở dữ liệu",
+      code: getMockSubject("DBI202", 1)?.code || "DBI202",
+      subject: getMockSubject("DBI202", 1)?.name || "Cơ sở dữ liệu",
       q: "Phát biểu nào sau đây đúng về khóa chính (Primary Key) trong một bảng dữ liệu quan hệ?",
       yourAnswer: "Cho phép chứa giá trị NULL nhưng không được trùng lặp.",
       correctAnswer: "Bắt buộc không được chứa giá trị NULL và không được trùng lặp (Unique).",
       reason: "Khóa chính dùng để định danh duy nhất cho một dòng trong bảng, do đó nó không bao giờ được phép chứa giá trị NULL."
+    },
+    {
+      code: getMockSubject("PRO192", 2)?.code || "PRO192",
+      subject: getMockSubject("PRO192", 2)?.name || "Lập trình hướng đối tượng",
+      q: "Trong Java, từ khóa nào được dùng để gọi constructor của lớp cha?",
+      yourAnswer: "this",
+      correctAnswer: "super",
+      reason: "super() gọi constructor của lớp cha, còn this() gọi một constructor khác trong cùng lớp. Hai lời gọi này phải nằm ở dòng đầu tiên của constructor."
+    },
+    {
+      code: getMockSubject("MAS291", 3)?.code || "MAS291",
+      subject: getMockSubject("MAS291", 3)?.name || "Xác suất thống kê",
+      q: "Một biến cố chắc chắn có xác suất bằng bao nhiêu?",
+      yourAnswer: "0.5",
+      correctAnswer: "1",
+      reason: "Biến cố chắc chắn luôn xảy ra trong không gian mẫu nên xác suất của nó bằng 1. Xác suất bằng 0 dành cho biến cố không thể xảy ra."
+    },
+    {
+      code: getMockSubject("PRF192", 4)?.code || "PRF192",
+      subject: getMockSubject("PRF192", 4)?.name || "Kỹ thuật lập trình C",
+      q: "Chỉ số hợp lệ cuối cùng của mảng có n phần tử trong C là bao nhiêu?",
+      yourAnswer: "n",
+      correctAnswer: "n - 1",
+      reason: "Mảng trong C được đánh chỉ số từ 0. Vì vậy mảng có n phần tử sử dụng các chỉ số từ 0 đến n - 1; truy cập vị trí n sẽ vượt giới hạn."
     }
   ];
 
   return (
-    <div className="flex min-h-screen w-full bg-paper-2">
+    <div
+      className="dashboard-shell flex min-h-screen w-full bg-paper-2"
+      style={schoolId === "fptu" ? FPT_DASHBOARD_ACCENT : undefined}
+    >
       {/* Sidebar */}
-      <aside className="hidden w-[260px] flex-none border-r border-line bg-paper lg:block">
+      <aside className="dashboard-sidebar hidden w-[268px] flex-none border-r border-line bg-paper lg:block">
         <div className="sticky top-0 flex h-screen flex-col justify-between p-6">
           <div>
             {/* Logo and site title */}
-            <div className="flex items-center gap-2.5 px-3 pb-5">
+            <div className="border-b border-line px-3 pb-5">
               <Logo size={28} />
+              <p className="mt-2 text-[10.5px] font-semibold uppercase tracking-[0.14em] text-ink-3">Không gian ôn tập · {home.abbr}</p>
             </div>
 
             {/* Navigation Groups */}
@@ -289,13 +429,16 @@ export default function DashboardPage() {
                       return (
                         <button
                           key={item.id}
-                          onClick={() => setActiveTab(item.id)}
-                          className={`flex items-center gap-3 rounded-[6px] px-3 py-2 text-[13px] font-medium w-full text-left transition-colors ${
+                          type="button"
+                          onClick={() => navigateToTab(item.id)}
+                          aria-current={isActive ? "page" : undefined}
+                          className={`relative flex w-full items-center gap-3 rounded-[7px] px-3 py-2.5 text-left text-[13px] font-medium transition-all duration-200 ${
                             isActive
-                              ? "bg-orange-soft text-orange-dark font-semibold"
-                              : "text-ink-2 hover:bg-paper-2 hover:text-ink"
+                              ? "translate-x-1 bg-orange-soft font-semibold text-orange-dark"
+                              : "text-ink-2 hover:translate-x-0.5 hover:bg-paper-2 hover:text-ink"
                           }`}
                         >
+                          {isActive && <span className="absolute -left-1 h-5 w-0.5 rounded-full bg-orange" aria-hidden="true" />}
                           <item.icon size={15} className={isActive ? "text-orange" : "text-ink-3"} />
                           {item.label}
                         </button>
@@ -306,10 +449,10 @@ export default function DashboardPage() {
               ))}
             </nav>
 
-            {/* Môn của tôi */}
+            {/* Quick access */}
             <div className="mt-5 border-t border-line pt-4 space-y-1">
               <h3 className="px-3 text-[10.5px] font-bold text-ink-3 uppercase tracking-wider">
-                Môn của tôi
+                Truy cập nhanh
               </h3>
               <div className="space-y-0.5 max-h-[180px] overflow-y-auto pr-1">
                 {suggested.map((s) => (
@@ -339,38 +482,111 @@ export default function DashboardPage() {
         </div>
       </aside>
 
-      {/* Main */}
-      <main className="min-w-0 flex-1 px-5 py-6 lg:px-10 lg:py-8">
-        {/* Mobile Profile Card */}
-        <div className="mb-6 flex items-center justify-between rounded-[10px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] lg:hidden">
-          <div className="flex items-center gap-3">
-            <Avatar size={40} name={studentName} />
-            <div className="min-w-0">
-              <p className="truncate text-[14px] font-semibold text-ink">{studentName}</p>
-              <p className="tnum text-[11.5px] text-ink-3">{mssv}</p>
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <button
+            type="button"
+            aria-label="Đóng menu điều hướng"
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="absolute inset-0 bg-ink/35 backdrop-blur-[2px]"
+          />
+          <div
+            ref={mobileMenuPanelRef}
+            id="dashboard-mobile-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dashboard-mobile-menu-title"
+            tabIndex={-1}
+            className="dashboard-mobile-drawer absolute inset-y-0 left-0 flex w-[min(86vw,340px)] flex-col overflow-y-auto border-r border-line bg-paper p-5 shadow-2xl outline-none"
+          >
+            <div className="flex items-center justify-between border-b border-line pb-4">
+              <div>
+                <Logo size={25} />
+                <h2 id="dashboard-mobile-menu-title" className="sr-only">Điều hướng dashboard</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  mobileMenuButtonRef.current?.focus();
+                }}
+                aria-label="Đóng menu"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-[7px] text-ink-3 transition-colors hover:bg-paper-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            <nav className="mt-5 space-y-5" aria-label="Điều hướng dashboard">
+              {NAV_GROUPS.map((group) => (
+                <div key={group.title} className="space-y-1">
+                  <h3 className="px-3 text-[10.5px] font-bold uppercase tracking-wider text-ink-3">{group.title}</h3>
+                  <div className="space-y-0.5">
+                    {group.items.map((item) => {
+                      const isActive = activeTab === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => navigateToTab(item.id)}
+                          aria-current={isActive ? "page" : undefined}
+                          className={`flex w-full items-center gap-3 rounded-[7px] px-3 py-2.5 text-left text-[13.5px] font-medium transition-colors ${
+                            isActive
+                              ? "bg-orange-soft font-semibold text-orange-dark"
+                              : "text-ink-2 hover:bg-paper-2 hover:text-ink"
+                          }`}
+                        >
+                          <item.icon size={16} className={isActive ? "text-orange" : "text-ink-3"} aria-hidden="true" />
+                          {item.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </nav>
+
+            <div className="mt-auto border-t border-line pt-4">
+              <div className="flex items-center gap-3 rounded-[8px] bg-paper-2 p-3">
+                <Avatar size={38} name={studentName} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13.5px] font-semibold text-ink">{studentName}</p>
+                  <p className="tnum text-[11px] text-ink-3">{mssv} · {home.abbr}</p>
+                </div>
+                <SchoolMark theme={home.theme} abbr={home.abbr} size={22} />
+              </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 rounded-[6px] bg-paper-2 px-2.5 py-1.5 text-[11.5px] font-medium text-ink-2">
-            <SchoolMark theme={home.theme} abbr={home.abbr} size={20} />
-            <span>{home.abbr}</span>
+        </div>
+      )}
+
+      {/* Main */}
+      <main className="min-w-0 flex-1 px-5 py-5 lg:px-10 lg:py-8 xl:px-12">
+        {/* Mobile header */}
+        <div className="sticky top-0 z-30 -mx-5 -mt-5 mb-6 flex items-center justify-between border-b border-line bg-paper-2/95 px-5 py-3.5 backdrop-blur-md lg:hidden">
+          <div className="min-w-0">
+            <Logo size={24} />
+            <p className="mt-1 truncate text-[12px] font-medium text-ink-3">{activeTabLabel}</p>
           </div>
+          <button
+            ref={mobileMenuButtonRef}
+            type="button"
+            onClick={() => setIsMobileMenuOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="dashboard-mobile-menu"
+            aria-label="Mở menu điều hướng"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-[8px] border border-line bg-paper text-ink-2 shadow-[var(--shadow-1)] transition-colors hover:border-orange-border hover:bg-orange-soft hover:text-orange-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange"
+          >
+            <Menu size={19} aria-hidden="true" />
+          </button>
         </div>
 
         {/* Overview Tab Content */}
         {activeTab === "tong-quan" && (
-          <div className="space-y-6">
-            <div id="tong-quan">
-              <h1 className="font-display text-[26px] font-semibold text-ink sm:text-[30px]">
-                Chào {studentShortName}, sẵn sàng luyện thi chưa?
-              </h1>
-              <p className="mt-1 text-[15px] text-ink-2">
-                Bạn đang luyện theo môi trường thi của{" "}
-                <span className="font-medium text-ink">{home.name}</span>.
-              </p>
-            </div>
-
+          <div className="dashboard-view space-y-6">
             {/* Stat strip */}
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div id="tong-quan" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
               <Stat icon={<FileCheck2 size={18} />} value="48" label="Đề đã làm" sub="+6 tuần này" tone="ink" />
               <Stat icon={<Target size={18} />} value="7.8" label="Điểm trung bình" sub="thang 10" tone="green" />
               <Stat icon={<BookOpen size={18} />} value="6" label="Môn đang luyện" tone="blue" />
@@ -379,7 +595,7 @@ export default function DashboardPage() {
 
             {/* Chart + History grid */}
             <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]" id="thong-ke">
-              <section className="rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
+              <section className="dashboard-panel rounded-[14px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
                 <div className="flex items-start justify-between">
                   <div>
                     <h2 className="text-[15px] font-semibold text-ink">Tiến bộ điểm số</h2>
@@ -393,7 +609,7 @@ export default function DashboardPage() {
               </section>
 
               {/* Lịch sử thi (hợp với 1 trường) */}
-              <section className="rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]" id="lich-su">
+              <section className="dashboard-panel rounded-[14px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]" id="lich-su">
                 <div className="flex items-center justify-between border-b border-line pb-3">
                   <div>
                     <h2 className="text-[15px] font-semibold text-ink">Lịch sử thi gần đây</h2>
@@ -423,13 +639,13 @@ export default function DashboardPage() {
             </div>
 
             {/* Suggested exams */}
-            <section className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]" id="mon">
+            <section className="dashboard-panel overflow-hidden rounded-[14px] border border-line bg-paper shadow-[var(--shadow-1)]" id="mon">
               <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
                 <div>
-                  <h2 className="text-[15px] font-semibold text-ink">Đề gợi ý cho bạn</h2>
-                  <p className="text-[12.5px] text-ink-3">Dựa trên {home.abbr} — học phần bạn đang luyện</p>
+                  <h2 className="text-[15px] font-semibold text-ink">Tiếp tục ôn tập</h2>
+                  <p className="text-[12.5px] text-ink-3">Các học phần truy cập nhanh của {home.abbr}</p>
                 </div>
-                <button onClick={() => setActiveTab("de-thi")} className="text-[13px] font-medium text-orange hover:text-orange-dark">
+                <button onClick={() => navigateToTab("de-thi")} className="text-[13px] font-medium text-orange hover:text-orange-dark">
                   Xem tất cả
                 </button>
               </div>
@@ -465,9 +681,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Môn học của tôi Tab Content */}
+        {/* Danh mục môn học */}
         {activeTab === "mon-hoc" && (
-          <div className="space-y-6">
+          <div className="dashboard-view space-y-6">
             {selectedSubjectForDocs ? (
               <div className="space-y-6">
                 {/* Back button and subject info */}
@@ -475,7 +691,7 @@ export default function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setSelectedSubjectForDocs(null)}
-                      className="inline-flex h-9 items-center gap-2 rounded-[6px] border border-line bg-paper px-3 text-[13px] font-semibold text-ink-2 hover:bg-paper-2 hover:text-ink transition-colors"
+                      className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-[6px] border border-line bg-paper px-3 text-[13px] font-semibold text-ink-2 transition-colors hover:bg-paper-2 hover:text-ink"
                     >
                       <ArrowLeft size={15} /> Quay lại
                     </button>
@@ -504,26 +720,19 @@ export default function DashboardPage() {
                           </div>
                           <div>
                             <h4 className="text-[15px] font-bold text-ink">{ch.title}</h4>
-                            <p className="text-[12.5px] text-ink-3 mt-1 flex items-center gap-1.5">
-                              <span>Slide bài giảng {selectedSubjectForDocs.code} · Chương {idx + 1}</span>
-                              <span className="h-1 w-1 rounded-full bg-line-strong" />
-                              <span className="font-semibold text-orange">PPTX (PowerPoint)</span>
+                            <p className="mt-1 text-[12.5px] text-ink-3">
+                              <span className="block">Slide bài giảng {selectedSubjectForDocs.code} · Chương {idx + 1}</span>
+                              <span className="mt-0.5 block font-semibold text-orange">PPTX (PowerPoint)</span>
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 sm:self-start md:self-auto">
+                        <div className="flex items-center sm:self-start md:self-auto">
                           <button
                             onClick={() => setPreviewingSlide({ chapterTitle: ch.title, slides: ch.slides, slideIndex: 0 })}
                             className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-orange px-4 text-[13px] font-semibold text-white hover:bg-orange-dark transition-colors"
                           >
                             <Eye size={14} /> Xem trực tiếp
-                          </button>
-                          <button
-                            onClick={() => alert(`Đã bắt đầu tải file PowerPoint: Slide_${selectedSubjectForDocs.code}_Chương_${idx + 1}.pptx`)}
-                            className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-line bg-paper px-4 text-[13px] font-semibold text-ink-2 hover:bg-paper-2 transition-colors"
-                          >
-                            <Download size={14} /> Tải về
                           </button>
                         </div>
                       </div>
@@ -536,44 +745,82 @@ export default function DashboardPage() {
               <>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div>
-                    <h1 className="font-display text-[26px] font-semibold text-ink">Môn học của tôi</h1>
-                    <p className="mt-1 text-[15px] text-ink-2">Danh sách tất cả các học phần giảng dạy và giáo trình của trường {home.name}.</p>
+                    <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Danh mục môn học</h1>
+                    <p className="mt-1 text-[15px] text-ink-2">Tra cứu học phần và tài liệu ôn tập theo chương trình của {home.name}.</p>
                   </div>
-                  <div className="flex gap-4 rounded-[8px] border border-line bg-paper px-4 py-2 text-[13px] shadow-[var(--shadow-1)]">
-                    <div>
+                  <div className="flex items-center gap-2">
+                    <div className="rounded-[8px] border border-line bg-paper px-4 py-2 text-[13px] shadow-[var(--shadow-1)]">
                       <span className="tnum font-semibold text-ink">{subjects.length}</span> môn học
                     </div>
+                    {schoolId === "fptu" && (
+                      <button
+                        type="button"
+                        onClick={() => setExpandedTerms(expandedTerms.size > 0 ? new Set() : new Set(Array.from({ length: 9 }, (_, index) => index + 1)))}
+                        className="inline-flex h-9 items-center rounded-[8px] border border-line bg-paper px-3 text-[12.5px] font-semibold text-ink-2 transition-colors hover:border-orange-border hover:bg-orange-soft hover:text-orange-dark"
+                      >
+                        {expandedTerms.size > 0 ? "Thu gọn các kỳ" : "Mở tất cả kỳ"}
+                      </button>
+                    )}
                   </div>
                 </div>
 
                 {/* Filter controls */}
-                <div className="flex flex-col gap-3">
-                  <input
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Tìm môn học theo tên hoặc mã (vd: CSD201)..."
-                    className="h-10 w-full max-w-md rounded-[7px] border border-line bg-paper px-3 text-[14px] outline-none focus:border-orange placeholder:text-ink-3"
-                  />
-                  <div className="flex flex-wrap gap-2 text-[12px]">
-                    <button
-                      onClick={() => { setSelectedFaculty(null); }}
-                      className={`px-3 py-1.5 rounded-full border transition-all font-medium ${
-                        !selectedFaculty ? "bg-orange border-orange text-white" : "border-line bg-paper text-ink-2 hover:bg-paper-2"
-                      }`}
-                    >
-                      Tất cả chuyên ngành
-                    </button>
-                    {faculties.map((f) => (
-                      <button
-                        key={f}
-                        onClick={() => setSelectedFaculty(selectedFaculty === f ? null : f)}
-                        className={`px-3 py-1.5 rounded-full border transition-all font-medium ${
-                          selectedFaculty === f ? "bg-orange border-orange text-white" : "border-line bg-paper text-ink-2 hover:bg-paper-2"
-                        }`}
+                <div className="rounded-[9px] border border-line bg-paper p-3 shadow-[var(--shadow-1)]">
+                  <div className="flex flex-col gap-2.5 md:flex-row md:items-center">
+                    <div className="relative min-w-0 flex-1">
+                      <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-3" aria-hidden="true" />
+                      <input
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Tìm theo tên hoặc mã môn..."
+                        aria-label="Tìm môn học theo tên hoặc mã"
+                        className="h-10 w-full rounded-[7px] border border-line bg-paper-2 pl-9 pr-3 text-[13.5px] outline-none placeholder:text-ink-3 focus:border-orange focus:bg-paper"
+                      />
+                    </div>
+
+                    {schoolId === "fptu" && (
+                      <select
+                        value={selectedTerm ?? ""}
+                        onChange={(e) => {
+                          const term = e.target.value ? Number(e.target.value) : null;
+                          setSelectedTerm(term);
+                          if (term) setExpandedTerms((current) => new Set(current).add(term));
+                        }}
+                        aria-label="Lọc theo kỳ học"
+                        className="h-10 rounded-[7px] border border-line bg-paper px-3 text-[13px] font-medium text-ink-2 outline-none focus:border-orange md:w-[145px]"
                       >
-                        {f}
+                        <option value="">Tất cả kỳ học</option>
+                        {Array.from({ length: 9 }, (_, index) => index + 1).map((term) => (
+                          <option key={term} value={term}>Kỳ {term}</option>
+                        ))}
+                      </select>
+                    )}
+
+                    <select
+                      value={selectedFaculty ?? ""}
+                      onChange={(e) => setSelectedFaculty(e.target.value || null)}
+                      aria-label="Lọc theo nhóm môn"
+                      className="h-10 rounded-[7px] border border-line bg-paper px-3 text-[13px] font-medium text-ink-2 outline-none focus:border-orange md:w-[210px]"
+                    >
+                      <option value="">Tất cả nhóm môn</option>
+                      {faculties.map((faculty) => (
+                        <option key={faculty} value={faculty}>{faculty}</option>
+                      ))}
+                    </select>
+
+                    {(searchQuery || selectedTerm || selectedFaculty) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setSelectedTerm(null);
+                          setSelectedFaculty(null);
+                        }}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-[7px] border border-line bg-paper px-3 text-[12.5px] font-semibold text-ink-2 transition-colors hover:border-orange-border hover:bg-orange-soft hover:text-orange-dark"
+                      >
+                        <X size={14} aria-hidden="true" /> Xóa lọc
                       </button>
-                    ))}
+                    )}
                   </div>
                 </div>
 
@@ -584,31 +831,53 @@ export default function DashboardPage() {
                     <p className="mt-1 text-[13px] text-ink-3">Thử thay đổi từ khóa tìm kiếm hoặc chọn chuyên ngành khác.</p>
                   </div>
                 ) : (
-                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    {filteredSubjects.map((s) => {
-                      return (
-                        <div key={s.id} className="rounded-[10px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] hover:border-orange transition-colors flex flex-col justify-between">
-                          <div>
-                            <div className="flex items-center justify-between">
-                              <span className="rounded bg-paper-2 border border-line px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-2">{s.code}</span>
-                              <span className="text-[11px] text-ink-3 font-medium">{s.faculty}</span>
+                  schoolId === "fptu" ? (
+                    <div className="space-y-8">
+                      {fptTermGroups.map((group) => (
+                        <section key={group.term} aria-labelledby={`dashboard-term-${group.term}`}>
+                          <button
+                            type="button"
+                            onClick={() => setExpandedTerms((current) => {
+                              const next = new Set(current);
+                              if (next.has(group.term)) next.delete(group.term);
+                              else next.add(group.term);
+                              return next;
+                            })}
+                            aria-expanded={expandedTerms.has(group.term)}
+                            aria-controls={`dashboard-term-subjects-${group.term}`}
+                            className="mb-3 flex w-full items-center gap-3 border-b-2 border-orange pb-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
+                          >
+                            <span className="tnum inline-flex h-10 w-10 items-center justify-center rounded-[8px] bg-orange text-[18px] font-bold text-white shadow-sm">
+                              {group.term}
+                            </span>
+                            <span>
+                              <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-orange-dark">Học kỳ</span>
+                              <span id={`dashboard-term-${group.term}`} className="block font-display text-[22px] font-semibold leading-tight text-ink">
+                                Kỳ {group.term}
+                              </span>
+                            </span>
+                            <span className="tnum ml-auto rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
+                              {group.subjects.length} môn học
+                            </span>
+                            <ChevronDown
+                              size={18}
+                              aria-hidden="true"
+                              className={`text-ink-3 transition-transform ${expandedTerms.has(group.term) ? "rotate-180" : ""}`}
+                            />
+                          </button>
+                          {expandedTerms.has(group.term) && (
+                            <div id={`dashboard-term-subjects-${group.term}`} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                              {group.subjects.map(renderSubjectCard)}
                             </div>
-                            <h3 className="mt-2 text-[14.5px] font-bold text-ink line-clamp-1">{s.name}</h3>
-                            <p className="mt-1 text-[12px] text-ink-3">Độ khó: {s.difficulty}</p>
-                          </div>
-
-                          <div className="mt-4 pt-3 border-t border-line">
-                            <button
-                              onClick={() => setSelectedSubjectForDocs(s)}
-                              className="inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-[6px] bg-orange px-4 text-[13px] font-semibold text-white hover:bg-orange-dark transition-colors"
-                            >
-                              <FileText size={14} /> Xem giáo trình & Slide
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          )}
+                        </section>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                      {filteredSubjects.map(renderSubjectCard)}
+                    </div>
+                  )
                 )}
               </>
             )}
@@ -617,10 +886,15 @@ export default function DashboardPage() {
 
         {/* Đọc tài liệu Tab Content */}
         {activeTab === "tai-lieu" && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="font-display text-[26px] font-semibold text-ink">Đọc tài liệu & Slide bài giảng</h1>
-              <p className="mt-1 text-[15px] text-ink-2">Thư viện slide, giáo trình PDF được đồng bộ hóa từ trường {home.name}.</p>
+          <div className="dashboard-view space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Tài liệu ôn tập</h1>
+                <p className="mt-1 text-[15px] text-ink-2">Giáo trình và slide đang có trong ExamCure, sắp theo từng học phần.</p>
+              </div>
+              <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
+                {docsList.length} tài liệu
+              </span>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -631,12 +905,21 @@ export default function DashboardPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <span className="rounded bg-paper-2 border border-line px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-3">{doc.code}</span>
-                    <h3 className="mt-1.5 truncate text-[14.5px] font-semibold text-ink" title={doc.name}>{doc.name}</h3>
+                    <h3 className="mt-1.5 truncate text-[14.5px] font-semibold text-ink" title={doc.title}>{doc.title}</h3>
                     <p className="mt-1 text-[12px] text-ink-3">{doc.type} · {doc.size} · {doc.reads}</p>
-                    <div className="mt-3.5 flex gap-2">
-                      <button className="inline-flex h-8 items-center rounded-[5px] bg-orange px-3 text-[12px] font-semibold text-white hover:bg-orange-dark transition-colors">Đọc ngay</button>
-                      <button className="inline-flex h-8 items-center rounded-[5px] border border-line px-3 text-[12px] font-semibold text-ink-2 hover:bg-paper-2 transition-colors">Tải về</button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const subject = subjects.find((item) => item.code === doc.code);
+                        if (subject) {
+                          setSelectedSubjectForDocs(subject);
+                          navigateToTab("mon-hoc");
+                        }
+                      }}
+                      className="mt-3.5 inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-orange-border bg-orange-soft px-3 text-[12px] font-semibold text-orange-dark transition-colors hover:bg-orange hover:text-white"
+                    >
+                      <Eye size={13} aria-hidden="true" /> Mở tài liệu
+                    </button>
                   </div>
                 </div>
               ))}
@@ -644,86 +927,13 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Thẻ ghi nhớ Flashcards Tab Content */}
-        {activeTab === "flashcards" && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="font-display text-[26px] font-semibold text-ink">Ôn tập bằng Thẻ ghi nhớ (Quizlet)</h1>
-              <p className="mt-1 text-[15px] text-ink-2">Sử dụng phương pháp gợi nhớ chủ động (Active Recall) để ôn tập định nghĩa nhanh.</p>
-            </div>
-
-            <div className="w-full space-y-4">
-              {/* Stats strip */}
-              <div className="flex justify-between text-[13px] text-ink-3 px-1">
-                <span>Tiến độ: <strong className="text-ink font-semibold">{cardIndex + 1}/{sampleFlashcards.length}</strong> thẻ</span>
-                <span className="flex gap-3">
-                  <span className="text-green font-medium">Đã thuộc: {knowCount}</span>
-                  <span className="text-orange font-medium">Chưa thuộc: {dontKnowCount}</span>
-                </span>
-              </div>
-
-              {/* Card wrapper */}
-              <div
-                onClick={() => setIsFlipped(!isFlipped)}
-                className="relative min-h-[260px] w-full cursor-pointer rounded-[14px] border border-line bg-paper p-6 shadow-[var(--shadow-1)] transition-all duration-300 hover:shadow-md flex flex-col justify-between items-center text-center"
-              >
-                <span className="text-[11px] font-bold text-ink-3 uppercase tracking-widest">{isFlipped ? "ĐÁP ÁN / GIẢI THÍCH" : "CÂU HỎI / KHÁI NIỆM"}</span>
-                <p className="text-[17px] font-medium text-ink px-4 py-6 select-none w-full">
-                  {isFlipped ? sampleFlashcards[cardIndex].back : sampleFlashcards[cardIndex].front}
-                </p>
-                <span className="flex items-center gap-1.5 text-[12px] text-orange font-semibold">
-                  <RotateCw size={13} /> {isFlipped ? "Click để xem câu hỏi" : "Click để xem đáp án"}
-                </span>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex gap-3">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDontKnowCount(dontKnowCount + 1);
-                    setIsFlipped(false);
-                    setCardIndex((cardIndex + 1) % sampleFlashcards.length);
-                  }}
-                  className="flex-1 inline-flex h-11 items-center justify-center gap-2 rounded-[8px] border border-line bg-paper px-4 font-semibold text-ink-2 hover:bg-paper-2 hover:text-ink transition-colors text-[14px]"
-                >
-                  <XCircle size={17} className="text-red" /> Chưa thuộc
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setKnowCount(knowCount + 1);
-                    setIsFlipped(false);
-                    setCardIndex((cardIndex + 1) % sampleFlashcards.length);
-                  }}
-                  className="flex-1 inline-flex h-11 items-center justify-center gap-2 rounded-[8px] bg-orange px-4 font-semibold text-white hover:bg-orange-dark transition-colors text-[14px] shadow-sm"
-                >
-                  <CheckCircle2 size={17} /> Đã thuộc
-                </button>
-              </div>
-
-              <div className="flex justify-center pt-2">
-                <button
-                  onClick={() => {
-                    setCardIndex(0);
-                    setIsFlipped(false);
-                    setKnowCount(0);
-                    setDontKnowCount(0);
-                  }}
-                  className="text-[12.5px] font-medium text-ink-3 hover:text-orange"
-                >
-                  Luyện lại từ đầu
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === "flashcards" && <div className="dashboard-view"><FlashcardWorkspace /></div>}
 
         {/* Luyện câu hỏi nhanh Tab Content */}
         {activeTab === "trac-nghiem" && (
-          <div className="space-y-6">
+          <div className="dashboard-view space-y-6">
             <div>
-              <h1 className="font-display text-[26px] font-semibold text-ink">Luyện câu hỏi trắc nghiệm nhanh</h1>
+              <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Luyện câu hỏi trắc nghiệm nhanh</h1>
               <p className="mt-1 text-[15px] text-ink-2">Trả lời các câu hỏi trắc nghiệm đơn lẻ có chấm điểm và giải thích tức thì.</p>
             </div>
 
@@ -812,10 +1022,15 @@ export default function DashboardPage() {
 
         {/* Sổ tay sửa sai Tab Content */}
         {activeTab === "so-tay-sai" && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="font-display text-[26px] font-semibold text-ink">Sổ tay sửa sai (AI Weakness Book)</h1>
-              <p className="mt-1 text-[15px] text-ink-2">Lưu trữ các câu hỏi bạn từng làm sai trong các đề thi thử để tập trung khắc phục lỗ hổng kiến thức.</p>
+          <div className="dashboard-view space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Sổ tay câu sai</h1>
+                <p className="mt-1 text-[15px] text-ink-2">Xem lại những câu đã làm sai và lý do để tránh lặp lại lỗi cũ.</p>
+              </div>
+              <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
+                {incorrectQuestions.length} câu cần xem lại
+              </span>
             </div>
 
             <div className="space-y-4">
@@ -842,7 +1057,7 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="rounded-[6px] bg-paper-2 p-3.5 border border-line text-[13px] text-ink-2 leading-relaxed">
-                    <strong className="text-ink font-semibold block mb-0.5">Phân tích lỗi sai & Gợi ý:</strong>
+                    <strong className="text-ink font-semibold block mb-0.5">Vì sao đáp án này đúng:</strong>
                     {q.reason}
                   </div>
                 </div>
@@ -853,17 +1068,17 @@ export default function DashboardPage() {
 
         {/* Đề thi gợi ý Tab Content */}
         {activeTab === "de-thi" && (
-          <div className="space-y-6">
+          <div className="dashboard-view space-y-6">
             <div>
-              <h1 className="font-display text-[26px] font-semibold text-ink">Đề thi thử đề xuất</h1>
-              <p className="mt-1 text-[15px] text-ink-2">Ngân hàng đề thi thử các học phần chính thức của {home.name}.</p>
+              <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Đề luyện tập</h1>
+              <p className="mt-1 text-[15px] text-ink-2">Chọn một học phần để bắt đầu bài luyện theo thời gian.</p>
             </div>
 
             <section className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]">
               <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
                 <div>
-                  <h2 className="text-[15px] font-semibold text-ink">Đề ôn tập gợi ý cho bạn</h2>
-                  <p className="text-[12.5px] text-ink-3">Dựa trên {home.abbr} — học phần bạn đang luyện</p>
+                  <h2 className="text-[15px] font-semibold text-ink">Học phần truy cập nhanh</h2>
+                  <p className="text-[12.5px] text-ink-3">Danh sách bài luyện của {home.abbr}</p>
                 </div>
               </div>
               <div className="divide-y divide-line">
@@ -900,10 +1115,15 @@ export default function DashboardPage() {
 
         {/* Lịch sử thi Tab Content */}
         {activeTab === "lich-su" && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="font-display text-[26px] font-semibold text-ink">Lịch sử thi gần đây</h1>
-              <p className="mt-1 text-[15px] text-ink-2">Kết quả thi thử và lưu trữ bài làm của bạn tại {home.name}.</p>
+          <div className="dashboard-view space-y-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h1 className="dashboard-title font-display text-[26px] font-semibold text-ink">Lịch sử thi gần đây</h1>
+                <p className="mt-1 text-[15px] text-ink-2">Kết quả thi thử và lưu trữ bài làm của bạn tại {home.name}.</p>
+              </div>
+              <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
+                {history.length} lượt thi
+              </span>
             </div>
 
             <section className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]">
@@ -931,45 +1151,32 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Thống kê Tab Content */}
-        {activeTab === "thong-ke" && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="font-display text-[26px] font-semibold text-ink">Tiến độ & Thống kê học tập</h1>
-              <p className="mt-1 text-[15px] text-ink-2">Phân tích xu hướng điểm số và theo dõi mục tiêu học phần ôn thi.</p>
-            </div>
-
-            <div className="grid gap-6 lg:grid-cols-[1.8fr_1fr]">
-              <section className="rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
-                <h2 className="text-[15px] font-semibold text-ink mb-3">Tiến bộ điểm số (8 lần thi gần nhất)</h2>
-                <ProgressChart data={TREND} />
-              </section>
-
-              <div className="space-y-4">
-                <Stat icon={<FileCheck2 size={18} />} value="48" label="Đề thi đã làm" tone="ink" />
-                <Stat icon={<Target size={18} />} value="7.8" label="Điểm trung bình" tone="green" />
-                <Stat icon={<Trophy size={18} />} value="Top 12%" label="Xếp hạng học tập" sub="cùng khóa" tone="orange" />
-              </div>
-            </div>
-          </div>
-        )}
       </main>
 
       {/* Slide Preview Modal */}
       {previewingSlide && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="relative w-full max-w-4xl rounded-[16px] border border-line bg-paper shadow-2xl overflow-hidden flex flex-col min-h-[480px]">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="slide-preview-title"
+            aria-describedby="slide-preview-description"
+            className="relative flex min-h-[480px] w-full max-w-4xl flex-col overflow-hidden rounded-[16px] border border-line bg-paper shadow-2xl"
+          >
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-line px-6 py-4 bg-paper-2">
               <div>
-                <h3 className="text-[16.5px] font-bold text-ink">{previewingSlide.chapterTitle}</h3>
-                <p className="text-[12px] text-ink-3">Đang xem chế độ trực tiếp Slide PowerPoint (.pptx)</p>
+                <h3 id="slide-preview-title" className="text-[16.5px] font-bold text-ink">{previewingSlide.chapterTitle}</h3>
+                <p id="slide-preview-description" className="text-[12px] text-ink-3">Bản xem trước nội dung slide</p>
               </div>
               <button
+                type="button"
+                autoFocus
                 onClick={() => setPreviewingSlide(null)}
+                aria-label="Đóng bản xem trước"
                 className="rounded-full p-1.5 hover:bg-line text-ink-3 hover:text-ink transition-colors"
               >
-                <X size={18} />
+                <X size={18} aria-hidden="true" />
               </button>
             </div>
 
@@ -997,28 +1204,25 @@ export default function DashboardPage() {
             </div>
 
             {/* Modal Footer Controls */}
-            <div className="border-t border-line px-6 py-4 bg-paper-2 flex items-center justify-between">
-              <button
-                onClick={() => alert(`Đã bắt đầu tải file PowerPoint: Slide_${selectedSubjectForDocs?.code}_Chương.pptx`)}
-                className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-line bg-paper px-4 text-[13px] font-semibold text-ink-2 hover:bg-paper-2 transition-colors"
-              >
-                <Download size={14} /> Tải file PPTX về máy
-              </button>
-
+            <div className="flex items-center justify-end border-t border-line bg-paper-2 px-6 py-4">
               <div className="flex gap-2">
                 <button
+                  type="button"
                   disabled={previewingSlide.slideIndex === 0}
                   onClick={() => setPreviewingSlide({ ...previewingSlide, slideIndex: previewingSlide.slideIndex - 1 })}
+                  aria-label="Xem slide trước"
                   className="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-line bg-paper text-ink-2 hover:bg-paper-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  <ChevronLeft size={16} />
+                  <ChevronLeft size={16} aria-hidden="true" />
                 </button>
                 <button
+                  type="button"
                   disabled={previewingSlide.slideIndex === previewingSlide.slides.length - 1}
                   onClick={() => setPreviewingSlide({ ...previewingSlide, slideIndex: previewingSlide.slideIndex + 1 })}
+                  aria-label="Xem slide tiếp theo"
                   className="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-line bg-paper text-ink-2 hover:bg-paper-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                 >
-                  <ChevronRight size={16} />
+                  <ChevronRight size={16} aria-hidden="true" />
                 </button>
               </div>
             </div>
@@ -1063,13 +1267,15 @@ function Stat({
           ? "var(--color-orange)"
           : "var(--color-ink)";
   return (
-    <div className="rounded-[10px] border border-line bg-paper p-4 shadow-[var(--shadow-1)]">
-      <span style={{ color }}>{icon}</span>
-      <p className="tnum mt-2 text-[26px] font-semibold leading-none" style={{ color }}>
+    <div className="dashboard-metric group rounded-[12px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-orange-border hover:shadow-[var(--shadow-2)]">
+      <div className="flex items-start justify-between gap-3">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] bg-paper-2 transition-colors group-hover:bg-orange-soft" style={{ color }}>{icon}</span>
+        {sub && <span className="text-right text-[10.5px] font-medium text-ink-3">{sub}</span>}
+      </div>
+      <p className="tnum mt-3 text-[25px] font-semibold leading-none" style={{ color }}>
         {value}
       </p>
       <p className="mt-1 text-[13px] font-medium text-ink-2">{label}</p>
-      {sub && <p className="text-[12px] text-ink-3">{sub}</p>}
     </div>
   );
 }

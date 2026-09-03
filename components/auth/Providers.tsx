@@ -2,13 +2,32 @@
 
 import { useEffect } from "react";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { useAuth } from "@/lib/auth";
+import { authUserFromSupabaseSession, login, useAuth } from "@/lib/auth";
 import { getSchool } from "@/lib/schools";
+import { AuthModalProvider } from "./AuthModalProvider";
+import {
+  getSupabaseBrowserClient,
+  isSupabaseBrowserConfigured,
+} from "@/lib/supabase-browser";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "238495034-dummy.apps.googleusercontent.com";
   const user = useAuth();
   const schoolId = user?.schoolId;
+
+  useEffect(() => {
+    if (!isSupabaseBrowserConfigured()) return;
+    const supabase = getSupabaseBrowserClient();
+    const sync = async () => {
+      const current = await authUserFromSupabaseSession();
+      if (current) login(current);
+    };
+    void sync();
+    const { data } = supabase.auth.onAuthStateChange(() => {
+      void sync();
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!schoolId) {
@@ -31,7 +50,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   return (
     <GoogleOAuthProvider clientId={clientId}>
-      {children}
+      <AuthModalProvider>{children}</AuthModalProvider>
     </GoogleOAuthProvider>
   );
 }

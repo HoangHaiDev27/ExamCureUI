@@ -96,11 +96,18 @@ export function PasswordField({
   );
 }
 
-export function SubmitButton({ children }: { children: ReactNode }) {
+export function SubmitButton({
+  children,
+  disabled,
+}: {
+  children: ReactNode;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="submit"
-      className="mt-1 h-12 w-full rounded-[8px] bg-orange text-[15px] font-semibold text-white shadow-[0_1px_2px_rgba(7,141,248,0.32)] transition-colors hover:bg-orange-dark"
+      disabled={disabled}
+      className="mt-1 h-12 w-full rounded-[8px] bg-orange text-[15px] font-semibold text-white shadow-[0_1px_2px_rgba(7,141,248,0.32)] transition-colors hover:bg-orange-dark disabled:cursor-not-allowed disabled:opacity-60"
     >
       {children}
     </button>

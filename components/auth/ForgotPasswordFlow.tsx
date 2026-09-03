@@ -1,18 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, MailCheck } from "lucide-react";
 import { AuthHeading } from "./AuthShell";
 import { Captcha } from "./Captcha";
 import { TextField, PasswordField, SubmitButton } from "./Fields";
 import { OtpInput } from "./OtpInput";
+import { useAuthModal } from "./AuthModalProvider";
+import { requestPasswordResetAPI, resetPasswordWithOtpAPI } from "@/lib/auth";
 
 type Step = "request" | "sent" | "reset" | "done";
 
 export function ForgotPasswordFlow() {
-  const router = useRouter();
+  const { openAuth } = useAuthModal();
   const [step, setStep] = useState<Step>("request");
 
   // request
@@ -28,41 +28,77 @@ export function ForgotPasswordFlow() {
 
   // resend cooldown
   const [resendIn, setResendIn] = useState(0);
+  const [pending, setPending] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
   useEffect(() => {
     if (resendIn <= 0) return;
     const id = setInterval(() => setResendIn((r) => Math.max(0, r - 1)), 1000);
     return () => clearInterval(id);
   }, [resendIn]);
 
-  function sendRequest(e: React.FormEvent) {
+  async function sendRequest(e: React.FormEvent) {
     e.preventDefault();
     const er: typeof reqErr = {};
     if (!/^\S+@\S+\.\S+$/.test(email)) er.email = "Email không hợp lệ";
     if (!captcha) er.captcha = true;
     setReqErr(er);
     if (Object.keys(er).length === 0) {
-      setStep("sent");
-      setResendIn(30);
+      setPending(true);
+      setRequestError(null);
+      try {
+        await requestPasswordResetAPI(email);
+        setStep("sent");
+        setResendIn(30);
+      } catch (error) {
+        setRequestError(error instanceof Error ? error.message : "Không thể gửi mã đặt lại.");
+      } finally {
+        setPending(false);
+      }
     }
   }
 
-  function submitReset(e: React.FormEvent) {
+  async function submitReset(e: React.FormEvent) {
     e.preventDefault();
     const er: typeof resetErr = {};
     if (code.length !== 6) er.code = "Mã gồm 6 chữ số";
     if (pw.length < 6) er.pw = "Mật khẩu tối thiểu 6 ký tự";
     if (confirm !== pw) er.confirm = "Mật khẩu nhập lại không khớp";
     setResetErr(er);
-    if (Object.keys(er).length === 0) setStep("done");
+    if (Object.keys(er).length === 0) {
+      setPending(true);
+      setRequestError(null);
+      try {
+        await resetPasswordWithOtpAPI(email, code, pw);
+        setStep("done");
+      } catch (error) {
+        setRequestError(error instanceof Error ? error.message : "Không thể đặt lại mật khẩu.");
+      } finally {
+        setPending(false);
+      }
+    }
+  }
+
+  async function resendResetCode() {
+    setPending(true);
+    setRequestError(null);
+    try {
+      await requestPasswordResetAPI(email);
+      setResendIn(30);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : "Không thể gửi lại mã.");
+    } finally {
+      setPending(false);
+    }
   }
 
   const backToLogin = (
-    <Link
-      href="/dang-nhap"
+    <button
+      type="button"
+      onClick={() => openAuth("login")}
       className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ink-2 transition-colors hover:text-orange"
     >
       <ArrowLeft size={15} /> Quay lại đăng nhập
-    </Link>
+    </button>
   );
 
   /* ---------------------------------------------------- request */
@@ -85,7 +121,8 @@ export function ForgotPasswordFlow() {
             autoComplete="email"
           />
           <Captcha checked={captcha} onChange={setCaptcha} error={reqErr.captcha} />
-          <SubmitButton>Gửi mã đặt lại</SubmitButton>
+          {requestError && <p className="text-[12.5px] text-danger">{requestError}</p>}
+          <SubmitButton disabled={pending}>{pending ? "Đang gửi..." : "Gửi mã đặt lại"}</SubmitButton>
         </form>
         <div className="mt-6 border-t border-line pt-5 text-center">{backToLogin}</div>
       </div>
@@ -120,7 +157,8 @@ export function ForgotPasswordFlow() {
             <span className="text-ink-3">Gửi lại sau {resendIn}s</span>
           ) : (
             <button
-              onClick={() => setResendIn(30)}
+              onClick={() => void resendResetCode()}
+              disabled={pending}
               className="font-medium text-orange transition-colors hover:text-orange-dark"
             >
               Gửi lại mã
@@ -167,7 +205,8 @@ export function ForgotPasswordFlow() {
             error={resetErr.confirm}
             autoComplete="new-password"
           />
-          <SubmitButton>Đặt lại mật khẩu</SubmitButton>
+          {requestError && <p className="text-[12.5px] text-danger">{requestError}</p>}
+          <SubmitButton disabled={pending}>{pending ? "Đang cập nhật..." : "Đặt lại mật khẩu"}</SubmitButton>
         </form>
         <div className="mt-6 border-t border-line pt-5 text-center">
           <button
@@ -194,7 +233,7 @@ export function ForgotPasswordFlow() {
         Mật khẩu của bạn đã được cập nhật. Hãy đăng nhập bằng mật khẩu mới.
       </p>
       <button
-        onClick={() => router.push("/dang-nhap")}
+        onClick={() => openAuth("login")}
         className="mt-6 h-12 w-full rounded-[8px] bg-orange text-[15px] font-semibold text-white shadow-[0_1px_2px_rgba(7,141,248,0.32)] transition-colors hover:bg-orange-dark"
       >
         Đăng nhập ngay

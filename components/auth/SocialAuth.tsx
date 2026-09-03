@@ -2,14 +2,36 @@
 
 import { useGoogleLogin } from "@react-oauth/google";
 import { useRouter } from "next/navigation";
-import { googleLoginAPI, login as localLogin } from "@/lib/auth";
+import { googleLoginAPI, login as localLogin, signInWithGoogle } from "@/lib/auth";
 import { STUDENT } from "@/lib/student";
 import { useState } from "react";
+import { isSupabaseBrowserConfigured } from "@/lib/supabase-browser";
 
 /** Hàng đăng nhập mạng xã hội + dải phân cách "hoặc". */
-export function SocialAuth({ verb = "Đăng nhập" }: { verb?: string }) {
+export function SocialAuth({
+  verb = "Đăng nhập",
+  redirectTo,
+  onSuccess,
+}: {
+  verb?: string;
+  redirectTo?: string;
+  onSuccess?: () => void;
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
+
+  const handleGoogle = async () => {
+    if (isSupabaseBrowserConfigured()) {
+      try {
+        setError("");
+        await signInWithGoogle(redirectTo ?? "/dashboard");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Đăng nhập Google thất bại.");
+      }
+      return;
+    }
+    loginGoogle();
+  };
 
   const loginGoogle = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
@@ -25,7 +47,8 @@ export function SocialAuth({ verb = "Đăng nhập" }: { verb?: string }) {
             refreshToken: data.refreshToken,
             role: data.role
           });
-          router.push("/dashboard");
+          onSuccess?.();
+          router.push(redirectTo ?? "/dashboard");
         }
       } catch (err) {
         const error = err as Error;
@@ -41,7 +64,7 @@ export function SocialAuth({ verb = "Đăng nhập" }: { verb?: string }) {
     <div>
       {error && <div className="mb-4 rounded-md bg-danger/10 p-3 text-sm text-danger">{error}</div>}
       <div className="flex flex-col gap-2.5">
-        <SocialButton label={`${verb} với Google`} onClick={() => loginGoogle()}>
+        <SocialButton label={`${verb} với Google`} onClick={() => void handleGoogle()}>
           <GoogleIcon />
         </SocialButton>
       </div>
@@ -84,25 +107,5 @@ function GoogleIcon() {
       <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z" />
       <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38z" />
     </svg>
-  );
-}
-
-function FacebookIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden className="shrink-0">
-      <circle cx="12" cy="12" r="11" fill="#1877F2" />
-      <path fill="#fff" d="M15.4 8.5h-1.9V7.2c0-.5.35-.65.6-.65h1.25V3.85L13.2 3.84c-2.35 0-2.9 1.76-2.9 2.9V8.5H8.6V11.2h1.7V20h3.2v-8.8h1.93l.27-2.7z" />
-    </svg>
-  );
-}
-
-function ZaloIcon() {
-  return (
-    <span
-      className="grid h-[18px] shrink-0 place-items-center rounded-[4px] bg-[#e7f0ff] px-1 text-[10px] font-bold leading-none text-[#0068FF]"
-      aria-hidden
-    >
-      Zalo
-    </span>
   );
 }

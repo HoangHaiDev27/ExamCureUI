@@ -34,7 +34,7 @@ export function RecommendedExams() {
     .filter((x): x is RecItem => Boolean(x.school && x.subject));
 
   return (
-    <section className="bg-paper">
+    <section id="tinh-nang" className="scroll-mt-6 bg-paper">
       <div className="mx-auto max-w-[1240px] px-5 py-16 lg:px-8 lg:py-20">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="max-w-2xl">

@@ -14,6 +14,10 @@ npm run dev      # http://localhost:3000
 npm run build    # bản production
 ```
 
+Backend AI nằm trong repo `ExamcureBe`: Supabase là cơ sở dữ liệu chính và
+MongoDB Atlas là Vector DB. Repo frontend này chỉ giữ Supabase anon key và gọi
+API qua `NEXT_PUBLIC_API_URL`. Trang quản trị nội dung ở `/admin`.
+
 Stack: **Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 ·
 lucide-react**. Font: **Be Vietnam Pro** (UI), **Lora** (display), **JetBrains
 Mono** (code).
@@ -58,9 +62,9 @@ lib/
   student.ts         # thí sinh demo, MSSV, mã đề
 ```
 
-> Toàn bộ dữ liệu là **mock cục bộ** (deterministic, không phụ thuộc `Math.random`
-> để tránh lệch SSR/CSR). Bài làm được lưu tạm vào `sessionStorage` rồi đọc lại ở
-> màn kết quả.
+> Dữ liệu demo của phòng thi hiện vẫn được sinh cục bộ. Auth Supabase và giao
+> diện quản trị đã được nối tới API backend; tài liệu, pipeline AI, ngân hàng
+> câu hỏi và đề hoạt động khi backend được cấu hình Supabase/MongoDB/OpenAI.
 
 Sản phẩm mô phỏng phục vụ mục đích luyện tập — không liên kết chính thức với các
 trường; tên & nhận diện chỉ dùng để mô phỏng giao diện thi.

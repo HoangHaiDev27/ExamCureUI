@@ -1,7 +1,14 @@
 import type { Metadata } from "next";
-import { Be_Vietnam_Pro, Lora, JetBrains_Mono } from "next/font/google";
+import {
+  Be_Vietnam_Pro,
+  Instrument_Serif,
+  Inter,
+  JetBrains_Mono,
+  Lora,
+} from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/auth/Providers";
+import { AiChatbot } from "@/components/AiChatbot";
 
 const beVietnam = Be_Vietnam_Pro({
   variable: "--font-bvp",
@@ -14,6 +21,22 @@ const lora = Lora({
   variable: "--font-lora",
   subsets: ["latin", "vietnamese"],
   weight: ["500", "600", "700"],
+  style: ["normal", "italic"],
+  display: "swap",
+});
+
+const landingSans = Inter({
+  variable: "--font-landing-sans",
+  subsets: ["latin", "vietnamese"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+
+const landingSerif = Instrument_Serif({
+  variable: "--font-landing-serif",
+  subsets: ["latin", "latin-ext"],
+  weight: "400",
+  style: ["normal", "italic"],
   display: "swap",
 });
 
@@ -36,10 +59,13 @@ export default function RootLayout({
   return (
     <html
       lang="vi"
-      className={`${beVietnam.variable} ${lora.variable} ${jetbrains.variable} h-full`}
+      className={`${beVietnam.variable} ${lora.variable} ${landingSans.variable} ${landingSerif.variable} ${jetbrains.variable} h-full`}
     >
       <body className="min-h-full">
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          <AiChatbot />
+        </Providers>
       </body>
     </html>
   );

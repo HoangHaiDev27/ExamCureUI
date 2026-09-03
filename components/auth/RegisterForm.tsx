@@ -10,7 +10,13 @@ import { TextField, PasswordField, SubmitButton } from "./Fields";
 import { registerAPI } from "@/lib/auth";
 import { SCHOOLS } from "@/lib/schools";
 
-export function RegisterForm() {
+export function RegisterForm({
+  redirectTo,
+  onSuccess,
+}: {
+  redirectTo?: string;
+  onSuccess?: () => void;
+} = {}) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -44,6 +50,7 @@ export function RegisterForm() {
       setIsSubmitting(true);
       try {
         await registerAPI(name, email, password, schoolId);
+        onSuccess?.();
         router.push(`/xac-thuc-otp?email=${encodeURIComponent(email)}`);
       } catch (error) {
         const err = error as Error;
@@ -56,7 +63,11 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={submit} noValidate>
-      <SocialAuth verb="Đăng ký" />
+      <SocialAuth
+        verb="Đăng ký"
+        redirectTo={redirectTo}
+        onSuccess={onSuccess}
+      />
       <div className="space-y-4">
         <TextField
           label="Họ và tên"

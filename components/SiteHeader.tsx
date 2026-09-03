@@ -3,15 +3,17 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { Logo } from "./Logo";
-import { ButtonLink } from "./Button";
+import { Button } from "./Button";
 import { useAuth, logout, initials, type AuthUser } from "@/lib/auth";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
 
 export function SiteHeader() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const user = useAuth();
+  const { openAuth } = useAuthModal();
 
   const schoolId = user?.schoolId || "fptu";
   const schoolLabel = schoolId === "fptu" ? "FPTU" : schoolId.toUpperCase();
@@ -57,12 +59,12 @@ export function SiteHeader() {
             </div>
           ) : (
             <div className="hidden items-center gap-2.5 lg:flex">
-              <ButtonLink href="/dang-nhap" variant="outline" size="sm">
+              <Button onClick={() => openAuth("login")} variant="outline" size="sm">
                 Đăng nhập
-              </ButtonLink>
-              <ButtonLink href={`/schools/${schoolId}/subjects`} variant="primary" size="sm">
+              </Button>
+              <Button onClick={() => openAuth("login")} variant="primary" size="sm">
                 Thi thử ngay
-              </ButtonLink>
+              </Button>
             </div>
           )}
 
@@ -111,12 +113,28 @@ export function SiteHeader() {
               </>
             ) : (
               <div className="mt-2 flex gap-2.5">
-                <ButtonLink href="/dang-nhap" variant="outline" size="md" className="flex-1">
+                <Button
+                  onClick={() => {
+                    setOpen(false);
+                    openAuth("login");
+                  }}
+                  variant="outline"
+                  size="md"
+                  className="flex-1"
+                >
                   Đăng nhập
-                </ButtonLink>
-                <ButtonLink href={`/schools/${schoolId}/subjects`} variant="primary" size="md" className="flex-1">
+                </Button>
+                <Button
+                  onClick={() => {
+                    setOpen(false);
+                    openAuth("login");
+                  }}
+                  variant="primary"
+                  size="md"
+                  className="flex-1"
+                >
                   Thi thử ngay
-                </ButtonLink>
+                </Button>
               </div>
             )}
           </nav>
@@ -179,6 +197,17 @@ function UserMenu({ user }: { user: AuthUser }) {
           >
             <LayoutDashboard size={16} className="text-ink-3" /> Bảng điều khiển
           </Link>
+
+          {user.role === "admin" && (
+            <Link
+              href="/admin"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] font-medium text-ink-2 transition-colors hover:bg-paper-2 hover:text-ink"
+              role="menuitem"
+            >
+              <ShieldCheck size={16} className="text-orange" /> Quản trị nội dung AI
+            </Link>
+          )}
 
           <div className="my-1 h-px bg-line" />
 

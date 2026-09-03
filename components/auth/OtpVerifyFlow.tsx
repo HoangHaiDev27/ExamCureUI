@@ -1,15 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, ShieldCheck } from "lucide-react";
 import { AuthHeading } from "./AuthShell";
 import { OtpInput } from "./OtpInput";
-import { verifyOtpAPI, login as localLogin } from "@/lib/auth";
+import { resendSignupOtpAPI, verifyOtpAPI, login as localLogin } from "@/lib/auth";
+import { useAuthModal } from "./AuthModalProvider";
 
 export function OtpVerifyFlow({ email }: { email: string }) {
   const router = useRouter();
+  const { openAuth } = useAuthModal();
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -43,6 +44,20 @@ export function OtpVerifyFlow({ email }: { email: string }) {
     } catch (err) {
       const error = err as Error;
       setError(error.message || "Mã OTP không hợp lệ.");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  async function resend() {
+    setError(null);
+    setVerifying(true);
+    try {
+      await resendSignupOtpAPI(email);
+      setResendIn(60);
+      setCode("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Không thể gửi lại mã OTP.");
     } finally {
       setVerifying(false);
     }
@@ -118,11 +133,8 @@ export function OtpVerifyFlow({ email }: { email: string }) {
             <span className="text-ink-3">Gửi lại sau {resendIn}s</span>
           ) : (
             <button
-              onClick={() => {
-                setResendIn(60);
-                setCode("");
-                setError(null);
-              }}
+              onClick={() => void resend()}
+              disabled={verifying}
               className="font-medium text-orange transition-colors hover:text-orange-dark"
             >
               Gửi lại mã
@@ -132,12 +144,13 @@ export function OtpVerifyFlow({ email }: { email: string }) {
       </div>
 
       <div className="mt-6 border-t border-line pt-5 text-center">
-        <Link
-          href="/dang-ky"
+        <button
+          type="button"
+          onClick={() => openAuth("register")}
           className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ink-2 transition-colors hover:text-orange"
         >
           <ArrowLeft size={15} /> Sai email? Đăng ký lại
-        </Link>
+        </button>
       </div>
     </div>
   );
