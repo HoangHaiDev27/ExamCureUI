@@ -62,7 +62,7 @@ export function SubjectBrowser({
   // Redirect if logged-in user belongs to another school
   useEffect(() => {
     if (user && user.schoolId && user.schoolId !== school.id) {
-      router.replace(`/schools/${user.schoolId}/subjects`);
+      router.replace("/dashboard");
     }
   }, [user, school.id, router]);
 

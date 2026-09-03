@@ -115,7 +115,7 @@ export function SubjectDetail({
         <ChevronRight size={14} />
         <Link href="/schools" className="hover:text-ink">Chọn trường</Link>
         <ChevronRight size={14} />
-        <Link href={`/schools/${school.id}/subjects`} className="hover:text-ink">{school.abbr}</Link>
+        <Link href="/schools" className="hover:text-ink">{school.abbr}</Link>
         <ChevronRight size={14} />
         <span className="font-medium text-ink-2">{subject.code}</span>
       </nav>

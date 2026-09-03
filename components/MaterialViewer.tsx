@@ -53,7 +53,7 @@ export function MaterialViewer({
       <nav className="flex flex-wrap items-center gap-1.5 py-5 text-[13px] text-ink-3">
         <Link href="/schools" className="hover:text-ink">Chọn trường</Link>
         <ChevronRight size={14} />
-        <Link href={`/schools/${school.id}/subjects`} className="hover:text-ink">{school.abbr}</Link>
+        <Link href="/schools" className="hover:text-ink">{school.abbr}</Link>
         <ChevronRight size={14} />
         <Link href={subjectHref} className="hover:text-ink">{subject.code}</Link>
         <ChevronRight size={14} />

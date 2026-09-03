@@ -107,7 +107,7 @@ export default function SchoolsPage() {
                 {suggestions.map((s) => (
                   <li key={s.id}>
                     <Link
-                      href={`/schools/${s.id}/subjects`}
+                      href="/dashboard"
                       className="flex items-center gap-3 px-3 py-2 hover:bg-paper-2"
                     >
                       <SchoolMark theme={s.theme} abbr={s.abbr} size={30} />

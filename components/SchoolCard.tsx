@@ -6,7 +6,7 @@ import { SchoolMark } from "./SchoolMark";
 export function SchoolCard({ school }: { school: School }) {
   return (
     <Link
-      href={`/schools/${school.id}/subjects`}
+      href="/dashboard"
       className="group relative flex flex-col rounded-[8px] border border-line bg-paper p-5 shadow-[var(--shadow-1)] transition-all duration-150 hover:-translate-y-0.5 hover:border-orange hover:shadow-[var(--shadow-2)] focus-visible:border-orange"
     >
       <div className="flex items-start gap-3.5">

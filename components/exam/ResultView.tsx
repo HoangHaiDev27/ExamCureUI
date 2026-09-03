@@ -155,7 +155,7 @@ export function ResultView({
               <RotateCcw size={15} /> Thi lại
             </Link>
             <Link
-              href={`/schools/${school.id}/subjects`}
+              href="/dashboard"
               className="inline-flex h-9 items-center rounded-[6px] px-3.5 text-[13px] font-medium text-white"
               style={{ background: theme.brand }}
             >

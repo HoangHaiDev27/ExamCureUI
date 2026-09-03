@@ -15,11 +15,8 @@ export function SiteHeader() {
   const user = useAuth();
   const { openAuth } = useAuthModal();
 
-  const schoolId = user?.schoolId || "fptu";
-  const schoolLabel = schoolId === "fptu" ? "FPTU" : schoolId.toUpperCase();
-
   const navItems = [
-    { href: `/schools/${schoolId}/subjects`, label: `Luyện thi ${schoolLabel}` },
+    { href: "/dashboard", label: "Bảng điều khiển" },
     { href: "/dien-dan", label: "Diễn đàn" },
   ];
 

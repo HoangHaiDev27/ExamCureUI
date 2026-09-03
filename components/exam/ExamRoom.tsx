@@ -420,7 +420,7 @@ export function ExamRoom({
         danger={danger}
         onExit={() => {
           if (confirm("Thoát khỏi phòng thi? Bài làm hiện tại sẽ không được lưu."))
-            router.push(`/schools/${school.id}/subjects`);
+            router.push("/dashboard");
         }}
       />
 

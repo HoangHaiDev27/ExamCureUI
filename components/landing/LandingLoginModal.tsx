@@ -159,12 +159,12 @@ export function LandingLoginModal({
           <div className="[&_button[type='submit']]:shadow-[0_1px_2px_rgba(200,79,29,0.3)]">
             {isLogin ? (
               <LoginForm
-                redirectTo="/schools/fptu/subjects"
+                redirectTo="/dashboard"
                 onSuccess={closeModal}
               />
             ) : (
               <RegisterForm
-                redirectTo="/schools/fptu/subjects"
+                redirectTo="/dashboard"
                 onSuccess={closeModal}
               />
             )}

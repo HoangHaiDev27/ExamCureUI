@@ -50,7 +50,7 @@ export function RecommendedExams() {
             </p>
           </div>
           <Link
-            href={`/schools/${schoolId}/subjects`}
+            href="/dashboard"
             className="inline-flex items-center gap-1.5 text-[14px] font-medium text-orange transition-colors hover:text-orange-dark"
           >
             Xem tất cả đề <ArrowRight size={16} />

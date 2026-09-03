@@ -14,10 +14,10 @@ const COLS = [
   {
     title: "Trường nổi bật",
     links: [
-      { label: "Đại học FPT", href: "/schools/fptu/subjects" },
-      { label: "Bách khoa Hà Nội", href: "/schools/hust/subjects" },
-      { label: "Kinh tế Quốc dân", href: "/schools/neu/subjects" },
-      { label: "Ngoại thương", href: "/schools/ftu/subjects" },
+      { label: "Đại học FPT", href: "/schools" },
+      { label: "Bách khoa Hà Nội", href: "/schools" },
+      { label: "Kinh tế Quốc dân", href: "/schools" },
+      { label: "Ngoại thương", href: "/schools" },
     ],
   },
   {
