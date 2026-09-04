@@ -293,7 +293,7 @@ export function AdminConsole() {
       <header className="border-b border-line bg-paper">
         <div className="mx-auto flex min-h-16 max-w-[1320px] items-center justify-between gap-4 px-5 py-3 lg:px-8">
           <div className="flex items-center gap-4">
-            <Link href="/"><Logo size={96} /></Link>
+            <Logo size={96} />
             <span className="hidden h-7 w-px bg-line sm:block" />
             <div>
               <p className="flex items-center gap-1.5 text-[13px] font-bold text-ink"><ShieldCheck size={15} className="text-orange" /> Quản trị nội dung AI</p>

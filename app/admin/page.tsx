@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { AdminConsole } from "@/components/admin/AdminConsole";
+import { AdminGuard } from "@/components/admin/AdminGuard";
 
 export const metadata: Metadata = {
   title: "Quản trị nội dung AI — ExamCure",
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function AdminPage() {
-  return <AdminConsole />;
+  return (
+    <AdminGuard>
+      <AdminConsole />
+    </AdminGuard>
+  );
 }

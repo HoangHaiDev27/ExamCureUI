@@ -10,6 +10,20 @@ import {
  */
 const KEY = "examcure:auth";
 const EVENT = "examcure:auth-change";
+/**
+ * Cookie "gương" của role — chỉ để middleware.ts đọc được ở edge (middleware
+ * không truy cập được localStorage). Không phải ranh giới bảo mật: cookie này
+ * do JS phía client set, người dùng vẫn có thể tự sửa. Ranh giới bảo mật thật
+ * là backend (requireSupabaseAdmin + RLS Postgres).
+ */
+const ROLE_COOKIE = "examcure_role";
+
+function setRoleCookie(role: string | undefined): void {
+  if (typeof document === "undefined") return;
+  document.cookie = role
+    ? `${ROLE_COOKIE}=${encodeURIComponent(role)}; path=/; max-age=2592000; samesite=lax`
+    : `${ROLE_COOKIE}=; path=/; max-age=0; samesite=lax`;
+}
 
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5010/api/v1";
 
@@ -37,6 +51,7 @@ export function login(user: AuthUser): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(KEY, JSON.stringify(user));
+    setRoleCookie(user.role || "student");
     window.dispatchEvent(new Event(EVENT));
   } catch {
     /* ignore */
@@ -47,6 +62,7 @@ export function logout(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(KEY);
+    setRoleCookie(undefined);
     window.dispatchEvent(new Event(EVENT));
     if (isSupabaseBrowserConfigured()) {
       void getSupabaseBrowserClient().auth.signOut();
