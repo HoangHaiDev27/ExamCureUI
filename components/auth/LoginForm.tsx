@@ -41,7 +41,7 @@ export function LoginForm() {
           role: data.role,
           schoolId: data.schoolId || "fptu",
         });
-        router.push("/");
+        router.push(data.role === "Admin" ? "/admin" : "/");
       } catch (error) {
         const err = error as Error;
         setErrors({ ...er, password: err.message });

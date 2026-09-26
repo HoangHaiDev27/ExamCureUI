@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, LayoutDashboard, LogOut, Menu, X } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, Menu, ShieldCheck, X } from "lucide-react";
 import { Logo } from "./Logo";
 import { ButtonLink } from "./Button";
 import { useAuth, logout, initials, type AuthUser } from "@/lib/auth";
@@ -99,6 +99,15 @@ export function SiteHeader() {
                 >
                   <LayoutDashboard size={17} className="text-ink-3" /> Bảng điều khiển
                 </Link>
+                {user.role === "Admin" && (
+                  <Link
+                    href="/admin"
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2.5 rounded-[6px] px-3 py-2.5 text-[15px] font-medium text-ink-2 hover:bg-paper-2"
+                  >
+                    <ShieldCheck size={17} className="text-ink-3" /> Quản trị hệ thống
+                  </Link>
+                )}
                 <button
                   onClick={() => {
                     logout();
@@ -179,6 +188,17 @@ function UserMenu({ user }: { user: AuthUser }) {
           >
             <LayoutDashboard size={16} className="text-ink-3" /> Bảng điều khiển
           </Link>
+
+          {user.role === "Admin" && (
+            <Link
+              href="/admin"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-[14px] font-medium text-ink-2 transition-colors hover:bg-paper-2 hover:text-ink"
+              role="menuitem"
+            >
+              <ShieldCheck size={16} className="text-ink-3" /> Quản trị hệ thống
+            </Link>
+          )}
 
           <div className="my-1 h-px bg-line" />
 
