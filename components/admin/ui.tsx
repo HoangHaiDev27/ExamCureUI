@@ -92,8 +92,9 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <h1 className="text-[24px] font-bold text-ink">{title}</h1>
+      <div className="dashboard-title">
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">Quản trị</span>
+        <h1 className="mt-1 font-display text-[27px] font-semibold leading-tight text-ink">{title}</h1>
         {description && <p className="mt-1 text-[14px] text-ink-2">{description}</p>}
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
@@ -102,7 +103,7 @@ export function PageHeader({ title, description, actions }: { title: string; des
 }
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)] ${className}`}>{children}</section>;
+  return <section className={`rounded-[14px] border border-line bg-paper shadow-[var(--shadow-1)] ${className}`}>{children}</section>;
 }
 
 export function Toolbar({ children }: { children: ReactNode }) {

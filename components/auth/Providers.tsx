@@ -14,8 +14,7 @@ import {
 export function Providers({ children }: { children: React.ReactNode }) {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
   const user = useAuth();
-  // Khu quản trị dùng màu gốc của ExamCure, không đổi theo trường.
-  const schoolId = user?.role === "admin" ? undefined : user?.schoolId;
+  const schoolId = user?.schoolId;
 
   const router = useRouter();
   const pathname = usePathname();

@@ -18,14 +18,20 @@ export function OverviewPanel() {
   return (
     <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em] text-ink-3">Bảng điều khiển</p>
-          <h1 className="mt-1 text-[26px] font-bold text-ink">Tình hình hệ thống thi thử</h1>
+        <div className="dashboard-title">
+          <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">Bảng điều khiển · Quản trị</span>
+          <h1 className="mt-1 font-display text-[27px] font-semibold leading-tight text-ink">Tình hình hệ thống thi thử</h1>
+          {data && (
+            <p className="mt-1.5 text-[14.5px] text-ink-2">
+              Hôm nay có <strong className="tnum font-semibold text-ink">{data.series.at(-1)?.count ?? 0}</strong> lượt nộp bài ·{" "}
+              <strong className="tnum font-semibold text-ink">+{data.users.new7d}</strong> người dùng mới trong 7 ngày.
+            </p>
+          )}
         </div>
         <button
           onClick={reload}
           disabled={loading}
-          className="inline-flex h-9 items-center gap-2 rounded-[6px] border border-line-strong bg-paper px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-paper-2 disabled:opacity-60"
+          className="inline-flex h-9 items-center gap-2 rounded-[8px] border border-line bg-paper px-3.5 text-[12.5px] font-semibold text-ink-2 shadow-[var(--shadow-1)] transition-colors hover:border-orange-border hover:bg-orange-soft hover:text-orange-dark disabled:opacity-60"
         >
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Làm mới
         </button>
@@ -64,6 +70,7 @@ function OverviewBody({ d }: { d: Overview }) {
           href="/admin/bai-thi"
           icon={ClipboardCheck}
           label="Bài nộp · 7 ngày"
+          tone="ink"
           value={subs7.toLocaleString("vi-VN")}
           delta={<CountDelta now={subs7} prev={subsPrev} />}
           foot={<Sparkline values={d.series.map((s) => s.count)} />}
@@ -73,6 +80,7 @@ function OverviewBody({ d }: { d: Overview }) {
           href="/admin/bai-thi"
           icon={Gauge}
           label="Điểm trung bình · 7 ngày"
+          tone="green"
           value={fmtScore(avg7)}
           unit="/10"
           delta={<ScoreDelta now={avg7} prev={avgPrev} />}
@@ -83,6 +91,7 @@ function OverviewBody({ d }: { d: Overview }) {
           href="/admin/nguoi-dung"
           icon={Users}
           label="Người dùng"
+          tone="blue"
           value={d.users.total.toLocaleString("vi-VN")}
           delta={
             d.users.new7d > 0 ? (
@@ -100,6 +109,7 @@ function OverviewBody({ d }: { d: Overview }) {
           href="/admin/cau-hoi"
           icon={FileQuestion}
           label="Ngân hàng câu hỏi"
+          tone="orange"
           value={d.catalog.questions.toLocaleString("vi-VN")}
           foot={
             <p className="text-[12.5px] text-ink-3">
@@ -182,9 +192,9 @@ function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="animate-rise rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]" style={stagger(i)}>
+    <section className="dashboard-panel animate-rise rounded-[14px] border border-line bg-paper shadow-[var(--shadow-1)]" style={stagger(i)}>
       <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-5 pt-4 pb-1">
-        <h2 className="text-[15px] font-bold text-ink">{title}</h2>
+        <h2 className="text-[15.5px] font-semibold text-ink">{title}</h2>
         {meta && <span className="font-mono text-[11.5px] text-ink-3 tabular-nums">{meta}</span>}
         {action && (
           <Link href={action.href} className="inline-flex items-center gap-1 text-[13px] font-medium text-orange hover:underline">
@@ -197,11 +207,20 @@ function Panel({
   );
 }
 
+const TONE = {
+  ink: "var(--color-ink)",
+  green: "var(--color-green)",
+  blue: "var(--color-blue)",
+  orange: "var(--color-orange)",
+} as const;
+
+/** Thẻ số liệu cùng kiểu Stat ở /dashboard: vạch màu trên, số chữ serif theo tông. */
 function Kpi({
   i,
   href,
   icon: Icon,
   label,
+  tone,
   value,
   unit,
   delta,
@@ -211,32 +230,32 @@ function Kpi({
   href: string;
   icon: typeof Users;
   label: string;
+  tone: keyof typeof TONE;
   value: string;
   unit?: string;
   delta?: ReactNode;
   foot?: ReactNode;
 }) {
+  const color = TONE[tone];
   return (
     <Link
       href={href}
       style={stagger(i)}
-      className="group animate-rise relative flex flex-col overflow-hidden rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)] transition-[border-color,box-shadow] hover:border-orange-border hover:shadow-[var(--shadow-2)]"
+      className="group animate-rise relative flex flex-col overflow-hidden rounded-[12px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-orange-border hover:shadow-[var(--shadow-2)]"
     >
-      <span className="absolute inset-x-0 top-0 h-[2px] origin-left scale-x-0 bg-orange transition-transform duration-300 group-hover:scale-x-100" aria-hidden />
-      <div className="flex items-center justify-between">
-        <span className="text-[13px] font-semibold text-ink-2">{label}</span>
-        <span className="grid h-8 w-8 place-items-center rounded-[8px] bg-paper-2 text-ink-3 transition-colors group-hover:bg-orange-soft group-hover:text-orange">
-          <Icon size={16} />
+      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: color, opacity: 0.5 }} aria-hidden />
+      <div className="flex items-start justify-between gap-3">
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] bg-paper-2 transition-colors group-hover:bg-orange-soft" style={{ color }}>
+          <Icon size={18} />
         </span>
-      </div>
-      <div className="mt-2 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <p className="text-[30px] font-bold leading-none tracking-[-0.02em] text-ink tabular-nums">
-          {value}
-          {unit && <span className="ml-0.5 text-[15px] font-semibold text-ink-3">{unit}</span>}
-        </p>
         {delta}
       </div>
-      <div className="mt-auto pt-4">{foot}</div>
+      <p className="tnum mt-3 font-display text-[28px] font-semibold leading-none" style={{ color }}>
+        {value}
+        {unit && <span className="ml-0.5 font-sans text-[14px] font-semibold text-ink-3">{unit}</span>}
+      </p>
+      <p className="mt-1.5 text-[13px] font-medium text-ink-2">{label}</p>
+      <div className="mt-auto pt-3">{foot}</div>
     </Link>
   );
 }
