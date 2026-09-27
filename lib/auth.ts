@@ -18,6 +18,24 @@ export interface AuthUser {
   schoolId?: string;
 }
 
+/**
+ * Cookie role để proxy.ts (chạy trên server, không đọc được localStorage) biết ai là admin
+ * và chuyển hướng sớm. Chỉ là gợi ý điều hướng — quyền thật do BE kiểm (RolesGuard).
+ */
+export const ROLE_COOKIE = "examcure_role";
+
+export function syncRoleCookie(role?: string): void {
+  if (typeof document === "undefined") return;
+  document.cookie = role
+    ? `${ROLE_COOKIE}=${encodeURIComponent(role)}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`
+    : `${ROLE_COOKIE}=; path=/; max-age=0; samesite=lax`;
+}
+
+/** Trang đích sau khi đăng nhập theo vai trò. */
+export function homeFor(role?: string): string {
+  return role === "Admin" ? "/admin" : "/";
+}
+
 export function getAuth(): AuthUser | null {
   if (typeof window === "undefined") return null;
   try {
@@ -32,6 +50,7 @@ export function login(user: AuthUser): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(KEY, JSON.stringify(user));
+    syncRoleCookie(user.role);
     window.dispatchEvent(new Event(EVENT));
   } catch {
     /* ignore */
@@ -42,6 +61,7 @@ export function logout(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(KEY);
+    syncRoleCookie();
     window.dispatchEvent(new Event(EVENT));
   } catch {
     /* ignore */

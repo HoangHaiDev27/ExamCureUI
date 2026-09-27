@@ -2,7 +2,7 @@
 
 import { useGoogleLogin } from "@react-oauth/google";
 import { useRouter } from "next/navigation";
-import { googleLoginAPI, login as localLogin } from "@/lib/auth";
+import { googleLoginAPI, homeFor, login as localLogin } from "@/lib/auth";
 import { STUDENT } from "@/lib/student";
 import { useState } from "react";
 
@@ -25,7 +25,7 @@ export function SocialAuth({ verb = "Đăng nhập" }: { verb?: string }) {
             refreshToken: data.refreshToken,
             role: data.role
           });
-          router.push("/dashboard");
+          router.replace(data.role === "Admin" ? homeFor(data.role) : "/dashboard");
         }
       } catch (err) {
         const error = err as Error;

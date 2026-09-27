@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { SocialAuth } from "./SocialAuth";
 import { Captcha } from "./Captcha";
 import { TextField, PasswordField, SubmitButton } from "./Fields";
-import { login, loginAPI } from "@/lib/auth";
+import { homeFor, login, loginAPI } from "@/lib/auth";
 import { STUDENT } from "@/lib/student";
 
 export function LoginForm() {
@@ -41,7 +41,7 @@ export function LoginForm() {
           role: data.role,
           schoolId: data.schoolId || "fptu",
         });
-        router.push(data.role === "Admin" ? "/admin" : "/");
+        router.replace(homeFor(data.role));
       } catch (error) {
         const err = error as Error;
         setErrors({ ...er, password: err.message });
