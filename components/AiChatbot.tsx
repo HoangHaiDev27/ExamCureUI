@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useId, useRef, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Bot, Send, Sparkles, X } from "lucide-react";
 
 type ChatMessage = {
@@ -41,6 +42,7 @@ function createReply(message: string) {
 }
 
 export function AiChatbot() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [draft, setDraft] = useState("");
@@ -103,6 +105,9 @@ export function AiChatbot() {
     event.preventDefault();
     sendMessage(draft);
   };
+
+  // Chatbot dành cho sinh viên; khu quản trị có bảng/thao tác ở góc phải.
+  if (pathname.startsWith("/admin")) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-[45] flex flex-col items-end sm:bottom-6 sm:right-6">

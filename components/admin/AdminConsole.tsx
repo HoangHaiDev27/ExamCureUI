@@ -135,6 +135,12 @@ export function AdminConsole() {
     setLoading(true);
     try {
       const data = await api<Overview>("/Admin/overview");
+      // BE NestJS cũng có /admin/overview (Express không phân biệt hoa thường) nhưng
+      // trả số liệu dashboard, không phải dữ liệu nội dung AI → đừng render kẻo crash.
+      const keys = ["subjects", "materials", "questions", "exams"] as const;
+      if (!keys.every((k) => Array.isArray(data?.[k]))) {
+        throw new Error(`Máy chủ ${API_BASE_URL} chưa hỗ trợ quản trị nội dung AI (cần BE Supabase).`);
+      }
       setOverview(data);
     } catch (error) {
       setOverview(null);

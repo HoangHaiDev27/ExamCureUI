@@ -2,7 +2,7 @@
 
 import { useGoogleLogin } from "@react-oauth/google";
 import { useRouter } from "next/navigation";
-import { googleLoginAPI, login as localLogin, signInWithGoogle } from "@/lib/auth";
+import { homeFor, googleLoginAPI, login as localLogin, signInWithGoogle } from "@/lib/auth";
 import { STUDENT } from "@/lib/student";
 import { useState } from "react";
 import { isSupabaseBrowserConfigured } from "@/lib/supabase-browser";
@@ -69,7 +69,7 @@ function LegacyGoogleAuth({
             role: data.role
           });
           onSuccess?.();
-          router.push(redirectTo ?? "/dashboard");
+          router.push(homeFor(data.role, redirectTo ?? "/dashboard"));
         }
       } catch (err) {
         const error = err as Error;

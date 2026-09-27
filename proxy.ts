@@ -15,15 +15,25 @@ import { NextResponse, type NextRequest } from "next/server";
  * Cố tình KHÔNG chặn khi không có cookie (chưa đăng nhập): AdminConsole còn
  * hỗ trợ luồng bootstrap-token cấp quyền admin lần đầu, vốn hoạt động ngay cả
  * khi chưa đăng nhập — xem components/admin/AdminGuard.tsx.
+ *
+ * Ngược lại, tài khoản admin mở bất kỳ trang nào ngoài /admin đều bị đưa về /admin.
+ * Role so sánh không phân biệt hoa thường (NestJS trả "Admin", Supabase trả "admin").
  */
 export function proxy(request: NextRequest) {
-  const role = request.cookies.get("examcure_role")?.value;
-  if (role && role !== "admin") {
+  const role = request.cookies.get("examcure_role")?.value?.toLowerCase();
+  const { pathname } = request.nextUrl;
+  const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
+
+  if (role === "admin" && !inAdmin) {
+    return NextResponse.redirect(new URL("/admin", request.url));
+  }
+  if (inAdmin && role && role !== "admin") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin", "/admin/:path*"],
+  // Mọi trang, trừ API, tài nguyên build và file tĩnh (.svg, .png, .ico…)
+  matcher: ["/((?!api|_next/static|_next/image|.*\\.[\\w]+$).*)"],
 };

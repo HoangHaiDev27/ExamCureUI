@@ -14,12 +14,14 @@ import {
   Menu,
   School,
   ShieldAlert,
+  Sparkles,
   Users,
   X,
 } from "lucide-react";
 import { ButtonLink } from "@/components/Button";
 import { getAuth, initials, login, logout } from "@/lib/auth";
 import { adminApi, ApiError } from "@/lib/admin";
+import { isSupabaseBrowserConfigured } from "@/lib/supabase-browser";
 import { ToastProvider } from "./ui";
 
 const NAV_GROUPS = [
@@ -33,6 +35,7 @@ const NAV_GROUPS = [
       { href: "/admin/truong", label: "Trường", icon: School },
       { href: "/admin/hoc-phan", label: "Học phần", icon: BookOpen },
       { href: "/admin/cau-hoi", label: "Ngân hàng câu hỏi", icon: FileQuestion },
+      { href: "/admin/noi-dung-ai", label: "Nội dung AI", icon: Sparkles },
     ],
   },
   {
@@ -53,6 +56,9 @@ type Gate =
 /**
  * Chỉ là lớp chắn giao diện — quyền thật do BE kiểm (RolesGuard đọc role từ DB).
  * Hỏi /auth/me thay vì tin role cache trong localStorage / cookie của proxy.ts.
+ *
+ * Dashboard này gọi API admin của BE NestJS. Khi FE cấu hình Supabase, token là của
+ * Supabase nên NestJS sẽ trả 401 (và lib/admin sẽ logout) → chuyển sang AdminConsole.
  */
 export function AdminShell({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -61,26 +67,31 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
+    if (isSupabaseBrowserConfigured()) {
+      router.replace("/admin/noi-dung-ai");
+      return;
+    }
     const auth = getAuth();
     if (!auth?.token) {
-      // Xoá cả cookie role, nếu không proxy sẽ đẩy /dang-nhap ngược về /admin.
+      // Xoá cả cookie role, nếu không proxy sẽ đẩy trang chủ ngược về /admin.
       logout();
-      router.replace("/dang-nhap");
+      router.replace("/");
       return;
     }
     adminApi
       .me()
       .then((me) => {
         // Đồng bộ role thật từ DB về localStorage + cookie.
-        if (me.role !== auth.role) login({ ...auth, role: me.role });
+        const isAdmin = me.role.toLowerCase() === "admin";
+        if (me.role.toLowerCase() !== auth.role) login({ ...auth, role: me.role });
         setGate(
-          me.role === "Admin"
+          isAdmin
             ? { status: "ok", name: me.fullName || me.email, email: me.email }
             : { status: "denied", reason: "Tài khoản của bạn không có quyền quản trị." },
         );
       })
       .catch((e: ApiError) => {
-        if (e.status === 401) router.replace("/dang-nhap");
+        if (e.status === 401) router.replace("/");
         else setGate({ status: "denied", reason: e.message });
       });
   }, [router]);
@@ -114,8 +125,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <ButtonLink href="/" variant="outline" size="sm">
               Về trang chủ
             </ButtonLink>
-            <ButtonLink href="/dang-nhap" size="sm">
-              Đăng nhập tài khoản khác
+            <ButtonLink href="/dashboard" size="sm">
+              Về bảng điều khiển
             </ButtonLink>
           </div>
         </div>
@@ -127,7 +138,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const current = NAV.find((n) => isActive(n.href));
   const signOut = () => {
     logout();
-    router.replace("/dang-nhap");
+    router.replace("/");
   };
 
   const sidebar = (

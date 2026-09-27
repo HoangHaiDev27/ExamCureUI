@@ -25,6 +25,25 @@ function setRoleCookie(role: string | undefined): void {
     : `${ROLE_COOKIE}=; path=/; max-age=0; samesite=lax`;
 }
 
+/**
+ * Role luôn lưu chữ thường: BE NestJS trả "Admin", Supabase trả "admin" — code FE
+ * (proxy, AdminGuard, SiteHeader…) chỉ so với "admin".
+ */
+export function normalizeRole(role?: string): string | undefined {
+  return role?.trim().toLowerCase() || undefined;
+}
+
+/** Trang đích sau khi đăng nhập: admin luôn vào /admin. */
+export function homeFor(role: string | undefined, fallback: string): string {
+  return normalizeRole(role) === "admin" ? "/admin" : fallback;
+}
+
+/** Ghi bù cookie role cho phiên đăng nhập có từ trước (proxy.ts chỉ đọc được cookie). */
+export function syncRoleCookie(): void {
+  const user = getAuth();
+  setRoleCookie(user ? user.role || "student" : undefined);
+}
+
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5010/api/v1";
 
 export interface AuthUser {
@@ -41,7 +60,9 @@ export function getAuth(): AuthUser | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
+    if (!raw) return null;
+    const user = JSON.parse(raw) as AuthUser;
+    return { ...user, role: normalizeRole(user.role) };
   } catch {
     return null;
   }
@@ -50,8 +71,9 @@ export function getAuth(): AuthUser | null {
 export function login(user: AuthUser): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(KEY, JSON.stringify(user));
-    setRoleCookie(user.role || "student");
+    const role = normalizeRole(user.role);
+    localStorage.setItem(KEY, JSON.stringify({ ...user, role }));
+    setRoleCookie(role || "student");
     window.dispatchEvent(new Event(EVENT));
   } catch {
     /* ignore */

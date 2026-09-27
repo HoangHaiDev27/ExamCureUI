@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { SocialAuth } from "./SocialAuth";
 import { Captcha } from "./Captcha";
 import { TextField, PasswordField, SubmitButton } from "./Fields";
-import { login, loginAPI } from "@/lib/auth";
+import { homeFor, login, loginAPI } from "@/lib/auth";
 import { STUDENT } from "@/lib/student";
 
 export function LoginForm({
@@ -49,7 +49,7 @@ export function LoginForm({
           schoolId: data.schoolId || "fptu",
         });
         onSuccess?.();
-        router.push(redirectTo ?? "/");
+        router.push(homeFor(data.role, redirectTo ?? "/"));
       } catch (error) {
         const err = error as Error;
         setErrors({ ...er, password: err.message });

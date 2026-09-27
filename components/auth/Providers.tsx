@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { authUserFromSupabaseSession, login, useAuth } from "@/lib/auth";
+import { authUserFromSupabaseSession, login, syncRoleCookie, useAuth } from "@/lib/auth";
 import { getSchool } from "@/lib/schools";
 import { AuthModalProvider } from "./AuthModalProvider";
 import {
@@ -13,7 +14,21 @@ import {
 export function Providers({ children }: { children: React.ReactNode }) {
   const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
   const user = useAuth();
-  const schoolId = user?.schoolId;
+  // Khu quản trị dùng màu gốc của ExamCure, không đổi theo trường.
+  const schoolId = user?.role === "admin" ? undefined : user?.schoolId;
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const isAdmin = user?.role === "admin";
+
+  // Phiên đăng nhập có từ trước khi có cookie role → ghi bù để proxy.ts nhận ra admin.
+  useEffect(() => syncRoleCookie(), []);
+
+  // Admin vừa đăng nhập ở client (vd. Google OAuth quay về /dashboard trước khi có cookie)
+  // → đưa về /admin; các lần điều hướng sau proxy.ts tự lo.
+  useEffect(() => {
+    if (isAdmin && !pathname.startsWith("/admin")) router.replace("/admin");
+  }, [isAdmin, pathname, router]);
 
   useEffect(() => {
     if (!isSupabaseBrowserConfigured()) return;
