@@ -1,5 +1,5 @@
-import { SubmissionsPanel } from "@/components/admin/SubmissionsPanel";
+import { redirect } from "next/navigation";
 
-export default function AdminSubmissionsPage() {
-  return <SubmissionsPanel />;
+export default function AdminPage() {
+  redirect("/admin/noi-dung-ai#de-thi");
 }

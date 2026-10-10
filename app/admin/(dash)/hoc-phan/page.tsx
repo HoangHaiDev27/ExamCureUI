@@ -1,5 +1,5 @@
-import { SubjectsPanel } from "@/components/admin/SubjectsPanel";
+import { redirect } from "next/navigation";
 
-export default function AdminSubjectsPage() {
-  return <SubjectsPanel />;
+export default function AdminPage() {
+  redirect("/admin/noi-dung-ai#mon-hoc");
 }

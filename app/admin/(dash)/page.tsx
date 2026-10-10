@@ -1,5 +1,5 @@
-import { OverviewPanel } from "@/components/admin/OverviewPanel";
+import { redirect } from "next/navigation";
 
-export default function AdminHomePage() {
-  return <OverviewPanel />;
+export default function AdminPage() {
+  redirect("/admin/noi-dung-ai");
 }

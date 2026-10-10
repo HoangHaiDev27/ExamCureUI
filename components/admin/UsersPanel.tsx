@@ -1,194 +1,103 @@
 "use client";
 
-import { useState } from "react";
-import { Lock, LockOpen } from "lucide-react";
-import { Button } from "@/components/Button";
-import { getAuth } from "@/lib/auth";
-import { adminApi, fmtDate, ROLE_LABEL, ROLES, type AdminUser, type Role } from "@/lib/admin";
-import {
-  Badge,
-  Card,
-  ConfirmDialog,
-  Empty,
-  ErrorBanner,
-  PageHeader,
-  Pagination,
-  SearchBox,
-  Select,
-  Spinner,
-  Table,
-  Td,
-  Toolbar,
-  useDebounced,
-  useLoader,
-  useToast,
-} from "./ui";
+import { useCallback, useEffect, useState } from "react";
+import { RefreshCw, Users } from "lucide-react";
+import { apiRequest } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 
-type Pending = { user: AdminUser; change: { role?: Role; isLocked?: boolean }; text: string; danger?: boolean };
+type Role = "student" | "admin";
+type Account = {
+  id: string;
+  email: string | null;
+  fullName: string;
+  schoolId: string | null;
+  role: Role;
+  createdAt: string;
+};
+const ROLE_LABEL: Record<Role, string> = { student: "Sinh viên", admin: "Quản trị" };
 
 export function UsersPanel() {
-  const toast = useToast();
+  const me = useAuth();
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [search, setSearch] = useState("");
-  const [role, setRole] = useState("");
-  const [status, setStatus] = useState("");
-  const [page, setPage] = useState(1);
-  const q = useDebounced(search);
-  const { data, error, loading, reload } = useLoader(
-    () => adminApi.users({ page, search: q, role, status }),
-    `${page}|${q}|${role}|${status}`,
-  );
-  const [pending, setPending] = useState<Pending | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState<Account | null>(null);
   const [busy, setBusy] = useState(false);
-  // AdminShell chỉ render nội dung sau khi xác thực ở client → đọc localStorage ở đây an toàn.
-  const myEmail = getAuth()?.email;
 
-  const filter = (fn: (v: string) => void) => (v: string) => {
-    fn(v);
-    setPage(1);
-  };
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await apiRequest<{ users: Account[] }>("/Admin/users", { signal });
+      if (!signal?.aborted) setAccounts(data.users);
+    } catch (reason) {
+      if (!signal?.aborted) setError(reason instanceof Error ? reason.message : "Không thể tải tài khoản.");
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, []);
 
-  async function apply() {
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => void load(controller.signal), 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [load]);
+
+  const apply = async () => {
     if (!pending) return;
     setBusy(true);
+    setError(null);
     try {
-      await adminApi.updateUser(pending.user.id, pending.change);
-      toast("ok", "Đã cập nhật tài khoản.");
+      const role: Role = pending.role === "admin" ? "student" : "admin";
+      await apiRequest(`/Admin/users/${pending.id}/role`, {
+        method: "PATCH", body: JSON.stringify({ role }),
+      });
       setPending(null);
-      reload();
-    } catch (e) {
-      toast("error", (e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+      await load();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Không thể đổi quyền tài khoản.");
+    } finally { setBusy(false); }
+  };
+
+  const query = search.trim().toLocaleLowerCase("vi");
+  const visible = accounts.filter((account) =>
+    [account.email, account.fullName, account.schoolId].some((value) => value?.toLocaleLowerCase("vi").includes(query)),
+  );
 
   return (
-    <>
-      <PageHeader title="Người dùng" description="Phân quyền và khoá / mở khoá tài khoản." />
-      {error && <ErrorBanner message={error} onRetry={reload} />}
-
-      <Card className="mt-4">
-        <Toolbar>
-          <SearchBox value={search} onChange={filter(setSearch)} placeholder="Tìm email, họ tên, MSSV…" />
-          <Select value={role} onChange={(e) => filter(setRole)(e.target.value)} className="!h-9 !w-auto" aria-label="Lọc theo quyền">
-            <option value="">Tất cả quyền</option>
-            {ROLES.map((r) => (
-              <option key={r} value={r}>
-                {ROLE_LABEL[r]}
-              </option>
+    <section id="nguoi-dung" className="scroll-mt-5 rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-[15px] font-bold text-ink"><Users size={18} className="text-orange" /> Người dùng và phân quyền</h2>
+        <button type="button" disabled={loading || busy} onClick={() => void load()} aria-label="Làm mới tài khoản" className="grid h-9 w-9 place-items-center rounded-[7px] border border-line text-ink-3 disabled:opacity-50"><RefreshCw size={15} /></button>
+      </div>
+      <input aria-label="Tìm tài khoản" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm theo họ tên, email hoặc trường" className="mt-4 h-10 w-full rounded-[8px] border border-line bg-paper-2 px-3 text-[13px] text-ink outline-none focus:border-orange" />
+      {error && <p role="alert" className="mt-3 text-[13px] text-danger">{error}</p>}
+      {pending && (
+        <div className="mt-4 rounded-[8px] border border-line bg-paper-2 p-4 text-[13px] text-ink">
+          Đổi quyền của <strong>{pending.email || pending.fullName}</strong> thành <strong>{ROLE_LABEL[pending.role === "admin" ? "student" : "admin"]}</strong>?
+          <div className="mt-3 flex gap-2">
+            <button type="button" disabled={busy} onClick={() => void apply()} className="rounded-[7px] bg-orange px-3 py-2 font-semibold text-white disabled:opacity-50">{busy ? "Đang lưu..." : "Xác nhận"}</button>
+            <button type="button" disabled={busy} onClick={() => setPending(null)} className="rounded-[7px] border border-line px-3 py-2">Hủy</button>
+          </div>
+        </div>
+      )}
+      <div className="mt-4 overflow-x-auto">
+        <table className="w-full text-left text-[13px]">
+          <thead className="border-b border-line text-ink-3"><tr><th className="py-2 pr-4">Tài khoản</th><th className="pr-4">Trường</th><th className="pr-4">Vai trò</th><th>Thao tác</th></tr></thead>
+          <tbody className="divide-y divide-line">
+            {visible.map((account) => (
+              <tr key={account.id}>
+                <td className="py-3 pr-4"><p className="font-semibold text-ink">{account.fullName}</p><p className="text-ink-3">{account.email || "Chưa có email"}</p></td>
+                <td className="pr-4 text-ink-2">{account.schoolId || "—"}</td>
+                <td className="pr-4 text-ink-2">{ROLE_LABEL[account.role]}</td>
+                <td><button type="button" disabled={busy || account.id === me?.id} onClick={() => setPending(account)} className="rounded-[7px] border border-line px-3 py-2 font-medium text-ink disabled:opacity-40">{account.id === me?.id ? "Tài khoản của bạn" : "Đổi quyền"}</button></td>
+              </tr>
             ))}
-          </Select>
-          <Select value={status} onChange={(e) => filter(setStatus)(e.target.value)} className="!h-9 !w-auto" aria-label="Lọc theo trạng thái">
-            <option value="">Mọi trạng thái</option>
-            <option value="active">Đang hoạt động</option>
-            <option value="unverified">Chưa xác thực email</option>
-            <option value="locked">Đã khoá</option>
-          </Select>
-        </Toolbar>
-
-        {loading && !data ? (
-          <Spinner />
-        ) : data && data.items.length === 0 ? (
-          <Empty title="Không có người dùng phù hợp" hint="Thử bỏ bớt bộ lọc hoặc đổi từ khoá tìm kiếm." />
-        ) : (
-          data && (
-            <>
-              <Table head={["Người dùng", "Quyền", "Trạng thái", "Hoạt động", "Ngày tạo", ""]}>
-                {data.items.map((u) => (
-                  <tr key={u.id} className={loading ? "opacity-60" : ""}>
-                    <Td>
-                      <p className="font-medium text-ink">{u.fullName || "—"}</p>
-                      <p className="text-[12.5px] text-ink-3">
-                        {u.email}
-                        {u.mssv && ` · ${u.mssv}`}
-                      </p>
-                    </Td>
-                    <Td>
-                      <Select
-                        value={u.role}
-                        disabled={u.email === myEmail}
-                        title={u.email === myEmail ? "Không thể tự đổi quyền của chính mình" : undefined}
-                        onChange={(e) => {
-                          const next = e.target.value as Role;
-                          setPending({
-                            user: u,
-                            change: { role: next },
-                            text: `Đổi quyền của ${u.email} từ "${ROLE_LABEL[u.role]}" thành "${ROLE_LABEL[next]}"?`,
-                          });
-                        }}
-                        className="!h-8 !w-[128px] text-[13px]"
-                        aria-label={`Quyền của ${u.email}`}
-                      >
-                        {ROLES.map((r) => (
-                          <option key={r} value={r}>
-                            {ROLE_LABEL[r]}
-                          </option>
-                        ))}
-                      </Select>
-                    </Td>
-                    <Td>
-                      {u.isLocked ? (
-                        <Badge tone="danger">Đã khoá</Badge>
-                      ) : u.isEmailVerified ? (
-                        <Badge tone="green">Hoạt động</Badge>
-                      ) : (
-                        <Badge tone="warning">Chưa xác thực</Badge>
-                      )}
-                    </Td>
-                    <Td className="text-[13px] text-ink-2">
-                      {u.totalExamsTaken} bài thi · chuỗi {u.streakDays} ngày
-                      <br />
-                      <span className="text-ink-3">Lần cuối: {fmtDate(u.lastActiveDate)}</span>
-                    </Td>
-                    <Td className="whitespace-nowrap text-ink-2">{fmtDate(u.createdAt)}</Td>
-                    <Td className="text-right">
-                      {u.email === myEmail ? (
-                        <span className="text-[12.5px] text-ink-3">Tài khoản của bạn</span>
-                      ) : u.isLocked ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setPending({ user: u, change: { isLocked: false }, text: `Mở khoá tài khoản ${u.email}?` })}
-                        >
-                          <LockOpen size={15} /> Mở khoá
-                        </Button>
-                      ) : (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="text-danger hover:!bg-danger-soft hover:!text-danger"
-                          onClick={() =>
-                            setPending({
-                              user: u,
-                              change: { isLocked: true },
-                              danger: true,
-                              text: `Khoá tài khoản ${u.email}? Người dùng sẽ bị đăng xuất khỏi mọi thiết bị khi phiên hiện tại hết hạn và không thể đăng nhập lại.`,
-                            })
-                          }
-                        >
-                          <Lock size={15} /> Khoá
-                        </Button>
-                      )}
-                    </Td>
-                  </tr>
-                ))}
-              </Table>
-              <Pagination page={data.page} limit={data.limit} total={data.total} onPage={setPage} />
-            </>
-          )
-        )}
-      </Card>
-
-      <ConfirmDialog
-        open={!!pending}
-        title={pending?.change.isLocked === true ? "Khoá tài khoản" : pending?.change.isLocked === false ? "Mở khoá tài khoản" : "Đổi quyền"}
-        message={pending?.text}
-        confirmLabel={pending?.change.isLocked === true ? "Khoá tài khoản" : "Xác nhận"}
-        danger={pending?.danger}
-        busy={busy}
-        onConfirm={apply}
-        onClose={() => setPending(null)}
-      />
-    </>
+          </tbody>
+        </table>
+        {loading ? <p className="py-4 text-[13px] text-ink-3">Đang tải tài khoản...</p> : !visible.length && <p className="py-4 text-[13px] text-ink-3">Không có tài khoản phù hợp.</p>}
+      </div>
+    </section>
   );
 }

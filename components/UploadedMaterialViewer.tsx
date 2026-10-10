@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowLeft, ChevronLeft, ChevronRight, Download, FileText, Presentation } from "lucide-react";
-import { API_BASE_URL, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
+import { apiRequest } from "@/lib/api";
 import type { School, Subject } from "@/lib/types";
 
 type Slide = { slide_number: number; text_content: string; notes: string | null };
@@ -24,15 +25,7 @@ export function UploadedMaterialViewer({ school, subject, versionId }: { school:
   useEffect(() => {
     if (!user?.token) return;
     const controller = new AbortController();
-    void fetch(`${API_BASE_URL}/Materials/${versionId}/slides`, {
-      headers: { Authorization: `Bearer ${user.token}` },
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.message || "Không thể tải nội dung slide.");
-        return data as MaterialPayload;
-      })
+    void apiRequest<MaterialPayload>(`/Materials/${versionId}/slides`, { signal: controller.signal })
       .then((data) => { setPayload(data); setError(null); setIndex(0); })
       .catch((reason: unknown) => {
         if (reason instanceof DOMException && reason.name === "AbortError") return;
@@ -45,9 +38,8 @@ export function UploadedMaterialViewer({ school, subject, versionId }: { school:
     if (!user?.token) { setError("Bạn cần đăng nhập để tải tài liệu."); return; }
     setDownloading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/Materials/${versionId}/download`, { headers: { Authorization: `Bearer ${user.token}` } });
-      const data = await response.json().catch(() => ({})) as { url?: string; message?: string };
-      if (!response.ok || !data.url) throw new Error(data.message || "Không thể tạo link tải tài liệu.");
+      const data = await apiRequest<{ url?: string }>(`/Materials/${versionId}/download`);
+      if (!data.url) throw new Error("Không thể tạo link tải tài liệu.");
       window.open(data.url, "_blank", "noopener,noreferrer");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Không thể tải tài liệu.");

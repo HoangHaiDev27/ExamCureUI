@@ -1,5 +1,5 @@
-import { SchoolsPanel } from "@/components/admin/SchoolsPanel";
+import { redirect } from "next/navigation";
 
-export default function AdminSchoolsPage() {
-  return <SchoolsPanel />;
+export default function AdminPage() {
+  redirect("/admin/noi-dung-ai#mon-hoc");
 }

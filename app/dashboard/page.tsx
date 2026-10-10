@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   BookOpen,
   FileCheck2,
@@ -183,6 +184,7 @@ const CHAPTERS_DATA: Record<string, { title: string; slides: string[] }[]> = {
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("tong-quan");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -203,12 +205,12 @@ export default function DashboardPage() {
   const studentName = user?.name || STUDENT.name;
   const avatarUrl = user?.avatarUrl;
 
-  const signOut = () => {
+  const signOut = async () => {
     setIsProfileMenuOpen(false);
     setIsMobileMenuOpen(false);
     setIsAccountModalOpen(false);
-    logout();
-    window.location.assign("/");
+    try { await logout(); router.replace("/"); }
+    catch { window.alert("Không thể đăng xuất. Vui lòng thử lại."); }
   };
 
   const getMockSubject = (code: string, fallbackIndex: number) =>

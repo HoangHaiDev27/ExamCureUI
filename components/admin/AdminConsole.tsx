@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Bot,
   Check,
-  ChevronRight,
+  LogOut,
   Database,
   FileQuestion,
   FileUp,
@@ -17,8 +17,10 @@ import {
   X,
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
-import { API_BASE_URL, useAuth } from "@/lib/auth";
+import { API_BASE_URL, logout, useAuth } from "@/lib/auth";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { apiRequest } from "@/lib/api";
+import { UsersPanel } from "./UsersPanel";
 
 type ServiceStatus = {
   supabase: boolean;
@@ -94,11 +96,10 @@ type Overview = {
 };
 
 type Notice = { tone: "success" | "error"; message: string } | null;
-const backendUrl = (path: string) => `${API_BASE_URL.replace(/\/$/, "")}${path}`;
 
 export function AdminConsole() {
+  const router = useRouter();
   const user = useAuth();
-  const [bootstrapToken, setBootstrapToken] = useState("");
   const [services, setServices] = useState<ServiceStatus | null>(null);
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -107,36 +108,22 @@ export function AdminConsole() {
   const [selectedVersionIds, setSelectedVersionIds] = useState<string[]>([]);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
-  const token = bootstrapToken.trim() || user?.token || "";
+  const token = user?.token || "";
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("examcure:admin-bootstrap-token");
-    if (saved) queueMicrotask(() => setBootstrapToken(saved));
-    void fetch(backendUrl("/System/status"))
-      .then((response) => response.json())
+    void apiRequest<{ services: ServiceStatus }>("/System/status", {}, { authenticated: false })
       .then((data) => setServices(data.services))
       .catch(() => setServices(null));
   }, []);
 
-  const api = async <T,>(path: string, init?: RequestInit): Promise<T> => {
-    const headers = new Headers(init?.headers);
-    if (token) headers.set("Authorization", `Bearer ${token}`);
-    if (init?.body && !headers.has("Content-Type")) {
-      headers.set("Content-Type", "application/json");
-    }
-    const response = await fetch(backendUrl(path), { ...init, headers });
-    const data = (await response.json().catch(() => ({}))) as T & { error?: string; message?: string };
-    if (!response.ok) throw new Error(data.message || data.error || `Yêu cầu thất bại (${response.status}).`);
-    return data;
-  };
+  const api = <T,>(path: string, init?: RequestInit): Promise<T> =>
+    apiRequest<T>(path, init);
 
   const refresh = async () => {
     if (!token) return;
     setLoading(true);
     try {
       const data = await api<Overview>("/Admin/overview");
-      // BE NestJS cũng có /admin/overview (Express không phân biệt hoa thường) nhưng
-      // trả số liệu dashboard, không phải dữ liệu nội dung AI → đừng render kẻo crash.
       const keys = ["subjects", "materials", "questions", "exams"] as const;
       if (!keys.every((k) => Array.isArray(data?.[k]))) {
         throw new Error(`Máy chủ ${API_BASE_URL} chưa hỗ trợ quản trị nội dung AI (cần BE Supabase).`);
@@ -306,9 +293,12 @@ export function AdminConsole() {
               <p className="text-[11px] text-ink-3">PowerPoint · Vector DB · Ngân hàng câu hỏi</p>
             </div>
           </div>
-          <Link href="/dashboard" className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-2 hover:text-orange">
-            Dashboard <ChevronRight size={15} />
-          </Link>
+          <button type="button" onClick={async () => {
+            try { await logout(); router.replace("/"); }
+            catch { setNotice({ tone: "error", message: "Không thể đăng xuất. Vui lòng thử lại." }); }
+          }} className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-ink-2 hover:text-orange">
+            Đăng xuất <LogOut size={15} />
+          </button>
         </div>
       </header>
 
@@ -328,27 +318,6 @@ export function AdminConsole() {
             </div>
           </div>
 
-          {user?.role !== "admin" && (
-            <div className="mt-4 grid gap-2 border-t border-line pt-4 sm:grid-cols-[1fr_auto]">
-              <input
-                type="password"
-                value={bootstrapToken}
-                onChange={(event) => setBootstrapToken(event.target.value)}
-                placeholder="ADMIN_BOOTSTRAP_TOKEN (chỉ dùng lúc khởi tạo)"
-                className="h-10 rounded-[8px] border border-line bg-paper-2 px-3 text-[13px] outline-none focus:border-orange"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  sessionStorage.setItem("examcure:admin-bootstrap-token", bootstrapToken.trim());
-                  void refresh();
-                }}
-                className="h-10 rounded-[8px] bg-ink px-4 text-[13px] font-semibold text-white"
-              >
-                Kết nối quản trị
-              </button>
-            </div>
-          )}
         </section>
 
         {notice && (
@@ -363,12 +332,13 @@ export function AdminConsole() {
           <div className="rounded-[12px] border border-dashed border-line-strong bg-paper p-10 text-center">
             <Database className="mx-auto text-ink-3" />
             <p className="mt-3 text-[14px] font-semibold text-ink">Chưa kết nối được backend quản trị</p>
-            <p className="mt-1 text-[13px] text-ink-3">Đăng nhập bằng tài khoản Supabase có role admin hoặc dùng bootstrap token.</p>
+            <p className="mt-1 text-[13px] text-ink-3">Kiểm tra kết nối máy chủ hoặc đăng nhập lại bằng tài khoản quản trị.</p>
           </div>
         ) : (
           <>
+            <UsersPanel />
             <div className="grid gap-6 xl:grid-cols-2">
-              <section className="rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
+              <section id="mon-hoc" className="scroll-mt-5 rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
                 <SectionTitle icon={<Plus size={18} />} title="1. Khai báo môn học" subtitle="Tạo môn trong Supabase trước khi tải tài liệu." />
                 <form onSubmit={createSubject} className="mt-5 grid gap-3 sm:grid-cols-3">
                   <Field name="schoolCode" label="Mã trường" placeholder="fptu" required />
@@ -444,7 +414,7 @@ export function AdminConsole() {
               </form>
             </section>
 
-            <section className="rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
+            <section id="cau-hoi" className="scroll-mt-5 rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
               <SectionTitle icon={<FileQuestion size={18} />} title="4. Admin duyệt ngân hàng câu hỏi" subtitle="Kiểm tra đáp án và nguồn slide trước khi đưa vào đề." />
               <div className="mt-5 space-y-4">
                 {overview.questions.length === 0 ? <Empty text="Chưa có câu hỏi AI." /> : overview.questions.map((question, index) => (
@@ -480,7 +450,7 @@ export function AdminConsole() {
               </div>
             </section>
 
-            <section className="rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
+            <section id="de-thi" className="scroll-mt-5 rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
               <SectionTitle icon={<Bot size={18} />} title="5. Admin tạo và xuất bản đề" subtitle={`${selectedQuestionIds.length} câu đã duyệt đang được chọn.`} />
               <form onSubmit={createExam} className="mt-5 grid gap-3 lg:grid-cols-4">
                 <Select name="subjectId" label="Môn học" required options={overview.subjects.map((subject) => ({ value: subject.id, label: `${subject.code} — ${subject.name}` }))} />

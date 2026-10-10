@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { API_BASE_URL, useAuth } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
+import { apiRequest } from "@/lib/api";
 import {
   BookOpen,
   ChevronRight,
@@ -44,7 +45,6 @@ const MATERIAL: Record<
 export function SubjectDetail({
   school,
   subject,
-  materials,
   examSets,
 }: {
   school: School;
@@ -68,17 +68,9 @@ export function SubjectDetail({
     if (!user?.token) return;
     const controller = new AbortController();
     const query = new URLSearchParams({ schoolCode: school.id, subjectCode: subject.code });
-    void fetch(`${API_BASE_URL}/Materials?${query}`, {
-      headers: { Authorization: `Bearer ${user.token}` },
-      signal: controller.signal,
-    })
-      .then(async (response) => {
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.message || "Không thể tải giáo trình.");
-        return data as { materials: Array<{
-          title: string; createdAt: string; version: { id: string; slide_count: number; original_filename: string; processed_at: string | null };
-        }> };
-      })
+    void apiRequest<{ materials: Array<{
+      title: string; createdAt: string; version: { id: string; slide_count: number; original_filename: string; processed_at: string | null };
+    }> }>(`/Materials?${query}`, { signal: controller.signal })
       .then((data) => {
         setUploadedMaterials(data.materials.map((entry) => ({
           id: entry.version.id,

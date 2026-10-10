@@ -1,52 +1,24 @@
 import { useEffect, useState } from "react";
-import {
-  getSupabaseBrowserClient,
-  isSupabaseBrowserConfigured,
-} from "./supabase-browser";
+import type { Session } from "@supabase/supabase-js";
+import { getSupabaseBrowserClient, isSupabaseBrowserConfigured } from "./supabase-browser";
 
-/**
- * Trạng thái đăng nhập phía client (mock, lưu localStorage).
- * Phát sự kiện để mọi component (vd. SiteHeader) cập nhật tức thì.
- */
-const KEY = "examcure:auth";
+// Supabase owns the session. This cache only supplies display data to components.
+const KEY = "examcure:supabase-auth";
 const EVENT = "examcure:auth-change";
-/**
- * Cookie "gương" của role — chỉ để middleware.ts đọc được ở edge (middleware
- * không truy cập được localStorage). Không phải ranh giới bảo mật: cookie này
- * do JS phía client set, người dùng vẫn có thể tự sửa. Ranh giới bảo mật thật
- * là backend (requireSupabaseAdmin + RLS Postgres).
- */
 const ROLE_COOKIE = "examcure_role";
+let authReady = false;
+let signingOut = false;
+let recoveringPassword = false;
+let authGeneration = 0;
+let profileRevision = 0;
+let refreshing: Promise<string> | null = null;
 
-function setRoleCookie(role: string | undefined): void {
-  if (typeof document === "undefined") return;
-  document.cookie = role
-    ? `${ROLE_COOKIE}=${encodeURIComponent(role)}; path=/; max-age=2592000; samesite=lax`
-    : `${ROLE_COOKIE}=; path=/; max-age=0; samesite=lax`;
-}
-
-/**
- * Role luôn lưu chữ thường: BE NestJS trả "Admin", Supabase trả "admin" — code FE
- * (proxy, AdminGuard, SiteHeader…) chỉ so với "admin".
- */
-export function normalizeRole(role?: string): string | undefined {
-  return role?.trim().toLowerCase() || undefined;
-}
-
-/** Trang đích sau khi đăng nhập: admin luôn vào /admin. */
-export function homeFor(role: string | undefined, fallback: string): string {
-  return normalizeRole(role) === "admin" ? "/admin" : fallback;
-}
-
-/** Ghi bù cookie role cho phiên đăng nhập có từ trước (proxy.ts chỉ đọc được cookie). */
-export function syncRoleCookie(): void {
-  const user = getAuth();
-  setRoleCookie(user ? user.role || "student" : undefined);
-}
-
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5010/api/v1";
+export const API_BASE_URL = (
+  process.env.NEXT_PUBLIC_API_URL?.trim() || "http://localhost:5010/api/v1"
+).replace(/\/$/, "");
 
 export interface AuthUser {
+  id?: string;
   name: string;
   email?: string;
   avatarUrl?: string;
@@ -56,49 +28,124 @@ export interface AuthUser {
   schoolId?: string;
 }
 
+function clearLegacyRoleCookie(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${ROLE_COOKIE}=; path=/; max-age=0; samesite=lax`;
+}
+
+export function normalizeRole(role?: string): string | undefined {
+  return role?.trim().toLowerCase() || undefined;
+}
+
+export function homeFor(role: string | undefined, fallback: string): string {
+  return normalizeRole(role) === "admin" ? "/admin" : fallback;
+}
+
 export function getAuth(): AuthUser | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined" || signingOut || recoveringPassword || !isSupabaseBrowserConfigured()) return null;
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return null;
     const user = JSON.parse(raw) as AuthUser;
     return { ...user, role: normalizeRole(user.role) };
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 }
 
 export function login(user: AuthUser): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || signingOut || recoveringPassword) return;
+  const role = normalizeRole(user.role);
   try {
-    const role = normalizeRole(user.role);
-    localStorage.setItem(KEY, JSON.stringify({ ...user, role }));
-    setRoleCookie(role || "student");
-    window.dispatchEvent(new Event(EVENT));
-  } catch {
-    /* ignore */
-  }
+    // Refresh tokens stay in the Supabase SDK's session store.
+    const { refreshToken: _refreshToken, ...displayUser } = user;
+    void _refreshToken;
+    localStorage.setItem(KEY, JSON.stringify({ ...displayUser, role }));
+    localStorage.removeItem("examcure:auth");
+    localStorage.removeItem("examcure:mock-register");
+    sessionStorage.removeItem("examcure:admin-bootstrap-token");
+  } catch { /* Storage may be unavailable. */ }
+  clearLegacyRoleCookie();
+  window.dispatchEvent(new Event(EVENT));
 }
 
-export function logout(): void {
+export function clearAuthCache(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(KEY);
-    setRoleCookie(undefined);
-    window.dispatchEvent(new Event(EVENT));
-    if (isSupabaseBrowserConfigured()) {
-      void getSupabaseBrowserClient().auth.signOut();
-    }
-  } catch {
-    /* ignore */
+    localStorage.removeItem("examcure:auth");
+    localStorage.removeItem("examcure:mock-register");
+    sessionStorage.removeItem("examcure:admin-bootstrap-token");
+  } catch { /* Storage may be unavailable. */ }
+  clearLegacyRoleCookie();
+  window.dispatchEvent(new Event(EVENT));
+}
+
+// Invalidates profile reads started before a sign-out in this or another tab.
+export function handleSupabaseSignOut(): void {
+  authGeneration += 1;
+  clearAuthCache();
+}
+
+export function markAuthReady(): void {
+  authReady = true;
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENT));
+}
+
+export function markAuthPending(): void {
+  authReady = false;
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(EVENT));
+}
+
+// Refresh role from the database without replacing the SDK session. A late
+// response must never restore a profile after sign-out or a newer profile read.
+export async function refreshAuthProfile(): Promise<AuthUser | null> {
+  const revision = ++profileRevision;
+  const generation = authGeneration;
+  const current = () => revision === profileRevision && generation === authGeneration;
+  try {
+    const user = await authUserFromSupabaseSession();
+    if (!current()) return null;
+    if (user) login(user);
+    else clearAuthCache();
+    return user;
+  } catch (error) {
+    if (current()) clearAuthCache();
+    throw error;
+  } finally {
+    if (current()) markAuthReady();
   }
 }
 
-/** Hook đọc trạng thái đăng nhập (chỉ dùng trong client component). */
+// Only the post-login dashboard landing redirects admins. Recovery and public
+// pages remain accessible, regardless of a previously cached role cookie.
+export function adminLandingFor(role: string | undefined, pathname: string): string | null {
+  return normalizeRole(role) === "admin" && pathname === "/dashboard" ? "/admin" : null;
+}
+
+export async function logout(): Promise<void> {
+  signingOut = true;
+  authGeneration += 1;
+  clearAuthCache();
+  try {
+    sessionStorage.removeItem("examcure:admin-bootstrap-token");
+    if (isSupabaseBrowserConfigured()) {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.signOut({ scope: "local" });
+      if (error) {
+        // The SDK removes its local session even if remote revocation fails.
+        const remaining = await supabase.auth.getSession();
+        if (remaining.error || remaining.data.session) throw error;
+      }
+    }
+  } finally {
+    signingOut = false;
+    clearAuthCache();
+  }
+}
+
 export function useAuth(): AuthUser | null {
   const [user, setUser] = useState<AuthUser | null>(null);
   useEffect(() => {
-    const sync = () => setUser(getAuth());
+    const sync = () => setUser(authReady ? getAuth() : null);
     sync();
     window.addEventListener(EVENT, sync);
     window.addEventListener("storage", sync);
@@ -110,284 +157,130 @@ export function useAuth(): AuthUser | null {
   return user;
 }
 
-/** Chữ cái viết tắt từ tên (vd. "Nguyễn Minh Quân" → "MQ"). */
+export function useAuthReady(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const sync = () => setReady(authReady);
+    sync();
+    window.addEventListener(EVENT, sync);
+    return () => window.removeEventListener(EVENT, sync);
+  }, []);
+  return ready;
+}
+
 export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  const pick = parts.slice(-2);
-  return pick.map((w) => w.charAt(0).toUpperCase()).join("") || "U";
+  return name.trim().split(/\s+/).slice(-2).map((word) => word.charAt(0).toUpperCase()).join("") || "U";
+}
+
+async function userFromSession(session: Session): Promise<AuthUser> {
+  const { data: profile, error } = await getSupabaseBrowserClient()
+    .from("profiles").select("full_name, school_id, role").eq("id", session.user.id).maybeSingle();
+  if (error) throw new Error("Không thể tải hồ sơ tài khoản. Vui lòng thử lại.");
+  const metadata = session.user.user_metadata;
+  return {
+    id: session.user.id,
+    name: profile?.full_name || metadata.full_name || session.user.email?.split("@")[0] || "Student",
+    email: session.user.email,
+    token: session.access_token,
+    schoolId: profile?.school_id || metadata.school_id || "fptu",
+    role: profile?.role || "student",
+    avatarUrl: typeof metadata.avatar_url === "string"
+      ? metadata.avatar_url
+      : typeof metadata.picture === "string" ? metadata.picture : undefined,
+  };
+}
+
+export async function authUserFromSupabaseSession(): Promise<AuthUser | null> {
+  if (!isSupabaseBrowserConfigured() || signingOut || recoveringPassword) return null;
+  const generation = authGeneration;
+  const { data, error } = await getSupabaseBrowserClient().auth.getSession();
+  if (error) throw error;
+  if (!data.session) return null;
+  const user = await userFromSession(data.session);
+  return generation === authGeneration && !signingOut && !recoveringPassword ? user : null;
+}
+
+// Every authenticated backend request reads the SDK session, never a cached JWT.
+export async function getAccessToken(forceRefresh = false): Promise<string> {
+  if (signingOut || recoveringPassword) throw new Error("Bạn cần đăng nhập để tiếp tục.");
+  const generation = authGeneration;
+  const supabase = getSupabaseBrowserClient();
+  let token: string;
+  if (forceRefresh) {
+    refreshing ??= supabase.auth.refreshSession().then(({ data, error }) => {
+      if (error || !data.session) throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+      return data.session.access_token;
+    }).finally(() => { refreshing = null; });
+    token = await refreshing;
+  } else {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) {
+      clearAuthCache();
+      throw new Error("Bạn cần đăng nhập để tiếp tục.");
+    }
+    token = data.session.access_token;
+  }
+  if (generation !== authGeneration || signingOut || recoveringPassword) throw new Error("Bạn cần đăng nhập để tiếp tục.");
+  return token;
 }
 
 export async function loginAPI(email: string, password: string) {
-  if (isSupabaseBrowserConfigured()) {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error || !data.session || !data.user) {
-      throw new Error(error?.message || "Đăng nhập Supabase thất bại.");
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name, school_id, role")
-      .eq("id", data.user.id)
-      .maybeSingle();
-    return {
-      fullName: profile?.full_name || data.user.user_metadata.full_name || email.split("@")[0],
-      email: data.user.email || email,
-      token: data.session.access_token,
-      refreshToken: data.session.refresh_token,
-      schoolId: profile?.school_id || data.user.user_metadata.school_id || "fptu",
-      role: profile?.role || "student",
-      avatarUrl:
-        typeof data.user.user_metadata.avatar_url === "string"
-          ? data.user.user_metadata.avatar_url
-          : typeof data.user.user_metadata.picture === "string"
-            ? data.user.user_metadata.picture
-            : undefined,
-    };
-  }
-
-  try {
-    const res = await fetch(`${API_BASE_URL}/Auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại thông tin.");
-    }
-    return await res.json();
-  } catch (err) {
-    if (err instanceof Error && (err instanceof TypeError || err.message?.includes("fetch"))) {
-      console.warn("Backend offline. Đăng nhập bằng chế độ Mock.");
-      let mockSchoolId = "fptu";
-      try {
-        const cachedReg = localStorage.getItem("examcure:mock-register");
-        if (cachedReg) {
-          const regData = JSON.parse(cachedReg);
-          if (regData.email === email) {
-            mockSchoolId = regData.schoolId || "fptu";
-          }
-        }
-      } catch {}
-      return {
-        fullName: email.split("@")[0],
-        email: email,
-        token: "mock-token",
-        schoolId: mockSchoolId,
-        role: "student"
-      };
-    }
-    throw err;
-  }
+  const { data, error } = await getSupabaseBrowserClient().auth.signInWithPassword({ email, password });
+  if (error || !data.session) throw new Error(error?.message || "Đăng nhập thất bại.");
+  const user = await userFromSession(data.session);
+  return { ...user, fullName: user.name };
 }
 
 export async function registerAPI(name: string, email: string, password: string, schoolId: string) {
-  if (isSupabaseBrowserConfigured()) {
-    const { data, error } = await getSupabaseBrowserClient().auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: name, school_id: schoolId },
-      },
-    });
-    if (error) throw new Error(error.message);
-    return {
-      success: true,
-      message: data.session
-        ? "Tài khoản đã được tạo."
-        : "Vui lòng kiểm tra email để xác thực tài khoản.",
-    };
-  }
-
-  try {
-    const res = await fetch(`${API_BASE_URL}/Auth/register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ 
-        email, 
-        password, 
-        fullName: name,
-        mssv: "",
-        schoolId: schoolId
-      })
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.message || "Đăng ký thất bại. Email có thể đã tồn tại.");
-    }
-    return await res.json();
-  } catch (err) {
-    if (err instanceof Error && (err instanceof TypeError || err.message?.includes("fetch"))) {
-      console.warn("Backend offline. Đang đăng ký bằng chế độ Mock.");
-      localStorage.setItem("examcure:mock-register", JSON.stringify({ email, schoolId, name }));
-      return {
-        success: true,
-        message: "Mock registration successful"
-      };
-    }
-    throw err;
-  }
-}
-
-export async function googleLoginAPI(idToken: string) {
-  const res = await fetch(`${API_BASE_URL}/Auth/google-login`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ idToken })
+  const { data, error } = await getSupabaseBrowserClient().auth.signUp({
+    email, password, options: { data: { full_name: name, school_id: schoolId } },
   });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || "Đăng nhập bằng Google thất bại.");
-  }
-  return await res.json();
+  if (error) throw error;
+  const user = data.session ? await userFromSession(data.session) : null;
+  return { success: true, user };
 }
 
 export async function verifyOtpAPI(email: string, code: string) {
-  if (isSupabaseBrowserConfigured()) {
-    const supabase = getSupabaseBrowserClient();
-    const { data, error } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: "signup",
-    });
-    if (error || !data.session || !data.user) {
-      throw new Error(error?.message || "Mã OTP Supabase không hợp lệ.");
-    }
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name, school_id, role")
-      .eq("id", data.user.id)
-      .maybeSingle();
-    return {
-      fullName: profile?.full_name || data.user.user_metadata.full_name || email.split("@")[0],
-      email: data.user.email || email,
-      token: data.session.access_token,
-      refreshToken: data.session.refresh_token,
-      schoolId: profile?.school_id || data.user.user_metadata.school_id || "fptu",
-      role: profile?.role || "student",
-    };
-  }
-
-  const res = await fetch(`${API_BASE_URL}/Auth/verify-otp`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code })
-  });
-  if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.message || "Xác thực OTP thất bại.");
-  }
-  return await res.json();
+  const { data, error } = await getSupabaseBrowserClient().auth.verifyOtp({ email, token: code, type: "signup" });
+  if (error || !data.session) throw new Error(error?.message || "Mã OTP không hợp lệ.");
+  const user = await userFromSession(data.session);
+  return { ...user, fullName: user.name };
 }
 
 export async function resendSignupOtpAPI(email: string) {
-  if (isSupabaseBrowserConfigured()) {
-    const { error } = await getSupabaseBrowserClient().auth.resend({
-      type: "signup",
-      email,
-    });
-    if (error) throw new Error(error.message);
-    return;
-  }
-
-  // Giữ tương thích với backend cũ trong lúc Supabase chưa được cấu hình.
-  const response = await fetch(`${API_BASE_URL}/Auth/resend-otp`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  }).catch(() => null);
-  if (response && !response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || "Không thể gửi lại mã OTP.");
-  }
+  const { error } = await getSupabaseBrowserClient().auth.resend({ type: "signup", email });
+  if (error) throw error;
 }
 
 export async function requestPasswordResetAPI(email: string) {
-  if (isSupabaseBrowserConfigured()) {
-    const { error } = await getSupabaseBrowserClient().auth.resetPasswordForEmail(email);
-    if (error) throw new Error(error.message);
-    return;
-  }
-
-  const response = await fetch(`${API_BASE_URL}/Auth/forgot-password`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
-  }).catch(() => null);
-  if (response && !response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || "Không thể gửi mã đặt lại mật khẩu.");
-  }
+  const { error } = await getSupabaseBrowserClient().auth.resetPasswordForEmail(email);
+  if (error) throw error;
 }
 
-export async function resetPasswordWithOtpAPI(
-  email: string,
-  code: string,
-  password: string,
-) {
-  if (isSupabaseBrowserConfigured()) {
-    const supabase = getSupabaseBrowserClient();
-    const { error: verifyError } = await supabase.auth.verifyOtp({
-      email,
-      token: code,
-      type: "recovery",
-    });
-    if (verifyError) throw new Error(verifyError.message);
-
-    const { error: updateError } = await supabase.auth.updateUser({ password });
-    if (updateError) throw new Error(updateError.message);
-    await supabase.auth.signOut();
-    return;
-  }
-
-  const response = await fetch(`${API_BASE_URL}/Auth/reset-password`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code, newPassword: password }),
-  }).catch(() => null);
-  if (response && !response.ok) {
-    const data = await response.json().catch(() => ({}));
-    throw new Error(data.message || "Không thể đặt lại mật khẩu.");
+export async function resetPasswordWithOtpAPI(email: string, code: string, password: string) {
+  const supabase = getSupabaseBrowserClient();
+  recoveringPassword = true;
+  authGeneration += 1;
+  let verified = false;
+  try {
+    const { error: verifyError } = await supabase.auth.verifyOtp({ email, token: code, type: "recovery" });
+    if (verifyError) throw verifyError;
+    verified = true;
+    const { error } = await supabase.auth.updateUser({ password });
+    if (error) throw error;
+  } finally {
+    // A recovery session must not redirect an admin away from the reset form,
+    // or remain an application login if updating the password fails.
+    try { if (verified) await logout(); }
+    finally { recoveringPassword = false; }
   }
 }
 
 export async function signInWithGoogle(redirectTo = "/dashboard") {
-  const supabase = getSupabaseBrowserClient();
-  const destination = new URL(redirectTo, window.location.origin).toString();
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: { redirectTo: destination },
+  const destination = new URL(redirectTo, window.location.origin);
+  if (destination.origin !== window.location.origin) throw new Error("Đường dẫn đăng nhập không hợp lệ.");
+  const { error } = await getSupabaseBrowserClient().auth.signInWithOAuth({
+    provider: "google", options: { redirectTo: destination.toString() },
   });
-  if (error) throw new Error(error.message);
-}
-
-export async function authUserFromSupabaseSession() {
-  if (!isSupabaseBrowserConfigured()) return null;
-  const supabase = getSupabaseBrowserClient();
-  const { data } = await supabase.auth.getSession();
-  const session = data.session;
-  if (!session) return null;
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, school_id, role")
-    .eq("id", session.user.id)
-    .maybeSingle();
-  return {
-    name:
-      profile?.full_name ||
-      session.user.user_metadata.full_name ||
-      session.user.email?.split("@")[0] ||
-      "Student",
-    email: session.user.email,
-    token: session.access_token,
-    refreshToken: session.refresh_token,
-    schoolId: profile?.school_id || session.user.user_metadata.school_id || "fptu",
-    role: profile?.role || "student",
-    avatarUrl:
-      typeof session.user.user_metadata.avatar_url === "string"
-        ? session.user.user_metadata.avatar_url
-        : typeof session.user.user_metadata.picture === "string"
-          ? session.user.user_metadata.picture
-          : undefined,
-  } satisfies AuthUser;
+  if (error) throw error;
 }

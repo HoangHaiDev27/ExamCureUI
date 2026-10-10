@@ -1,5 +1,5 @@
-import { UsersPanel } from "@/components/admin/UsersPanel";
+import { redirect } from "next/navigation";
 
-export default function AdminUsersPage() {
-  return <UsersPanel />;
+export default function AdminPage() {
+  redirect("/admin/noi-dung-ai#nguoi-dung");
 }

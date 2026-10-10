@@ -1,87 +1,25 @@
 "use client";
 
-import { useGoogleLogin } from "@react-oauth/google";
-import { useRouter } from "next/navigation";
-import { homeFor, googleLoginAPI, login as localLogin, signInWithGoogle } from "@/lib/auth";
-import { STUDENT } from "@/lib/student";
 import { useState } from "react";
+import { signInWithGoogle } from "@/lib/auth";
 import { isSupabaseBrowserConfigured } from "@/lib/supabase-browser";
 
-/** Hàng đăng nhập mạng xã hội + dải phân cách "hoặc". */
-export function SocialAuth({
-  verb = "Đăng nhập",
-  redirectTo,
-  onSuccess,
-}: {
+export function SocialAuth({ verb = "Đăng nhập", redirectTo }: {
   verb?: string;
   redirectTo?: string;
   onSuccess?: () => void;
 }) {
-  if (isSupabaseBrowserConfigured()) {
-    return <SupabaseGoogleAuth verb={verb} redirectTo={redirectTo} />;
-  }
-  if (!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim()) {
-    return <SocialLayout error="Google đăng nhập chưa được cấu hình." verb={verb} disabled />;
-  }
-  return <LegacyGoogleAuth verb={verb} redirectTo={redirectTo} onSuccess={onSuccess} />;
-}
-
-function SupabaseGoogleAuth({ verb, redirectTo }: { verb: string; redirectTo?: string }) {
   const [error, setError] = useState("");
-
+  const configured = isSupabaseBrowserConfigured();
   const handleGoogle = async () => {
     try {
       setError("");
       await signInWithGoogle(redirectTo ?? "/dashboard");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Đăng nhập Google thất bại.");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Đăng nhập Google thất bại.");
     }
   };
-
-  return <SocialLayout error={error} verb={verb} onGoogle={() => void handleGoogle()} />;
-}
-
-function LegacyGoogleAuth({
-  verb,
-  redirectTo,
-  onSuccess,
-}: {
-  verb: string;
-  redirectTo?: string;
-  onSuccess?: () => void;
-}) {
-  const router = useRouter();
-  const [error, setError] = useState("");
-
-  const loginGoogle = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        setError("");
-        // useGoogleLogin trả về access_token, ta gửi cái này cho backend
-        if (tokenResponse.access_token) {
-          const data = await googleLoginAPI(tokenResponse.access_token);
-          localLogin({
-            name: data.fullName || data.email || STUDENT.name,
-            email: data.email,
-            avatarUrl: data.avatarUrl,
-            token: data.token,
-            refreshToken: data.refreshToken,
-            role: data.role
-          });
-          onSuccess?.();
-          router.push(homeFor(data.role, redirectTo ?? "/dashboard"));
-        }
-      } catch (err) {
-        const error = err as Error;
-        setError(error.message || "Đăng nhập bằng Google thất bại.");
-      }
-    },
-    onError: () => {
-      setError("Quá trình đăng nhập Google bị hủy hoặc có lỗi.");
-    }
-  });
-
-  return <SocialLayout error={error} verb={verb} onGoogle={() => loginGoogle()} />;
+  return <SocialLayout error={error} verb={verb} disabled={!configured} onGoogle={() => void handleGoogle()} />;
 }
 
 function SocialLayout({

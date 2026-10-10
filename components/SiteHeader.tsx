@@ -99,8 +99,9 @@ export function SiteHeader() {
                   <LayoutDashboard size={17} className="text-ink-3" /> Bảng điều khiển
                 </Link>
                 <button
-                  onClick={() => {
-                    logout();
+                  onClick={async () => {
+                    try { await logout(); }
+                    catch { window.alert("Không thể đăng xuất. Vui lòng thử lại."); }
                     setOpen(false);
                   }}
                   className="flex items-center gap-2.5 rounded-[6px] px-3 py-2.5 text-left text-[15px] font-medium text-danger hover:bg-danger-soft"
@@ -205,10 +206,10 @@ function UserMenu({ user }: { user: AuthUser }) {
           <div className="my-1 h-px bg-line" />
 
           <button
-            onClick={() => {
+            onClick={async () => {
               setOpen(false);
-              logout();
-              router.push("/");
+              try { await logout(); router.replace("/"); }
+              catch { window.alert("Không thể đăng xuất. Vui lòng thử lại."); }
             }}
             className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] font-medium text-danger transition-colors hover:bg-danger-soft"
             role="menuitem"

@@ -34,10 +34,12 @@ export function OtpVerifyFlow({ email }: { email: string }) {
     try {
       const data = await verifyOtpAPI(email, code);
       localLogin({
-        name: data.fullName || data.email,
+        id: data.id,
+        name: data.fullName,
+        schoolId: data.schoolId,
+        avatarUrl: data.avatarUrl,
         email: data.email,
         token: data.token,
-        refreshToken: data.refreshToken,
         role: data.role
       });
       setDone(true);

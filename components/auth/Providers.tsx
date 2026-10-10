@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { GoogleOAuthProvider } from "@react-oauth/google";
-import { authUserFromSupabaseSession, login, syncRoleCookie, useAuth } from "@/lib/auth";
+import { adminLandingFor, handleSupabaseSignOut, markAuthPending, markAuthReady, refreshAuthProfile, useAuth } from "@/lib/auth";
 import { getSchool } from "@/lib/schools";
 import { AuthModalProvider } from "./AuthModalProvider";
 import {
@@ -12,36 +11,63 @@ import {
 } from "@/lib/supabase-browser";
 
 export function Providers({ children }: { children: React.ReactNode }) {
-  const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID?.trim();
+  const [authError, setAuthError] = useState(false);
   const user = useAuth();
   const schoolId = user?.schoolId;
 
   const router = useRouter();
   const pathname = usePathname();
-  const isAdmin = user?.role === "admin";
-
-  // Phiên đăng nhập có từ trước khi có cookie role → ghi bù để proxy.ts nhận ra admin.
-  useEffect(() => syncRoleCookie(), []);
-
-  // Admin vừa đăng nhập ở client (vd. Google OAuth quay về /dashboard trước khi có cookie)
-  // → đưa về /admin; các lần điều hướng sau proxy.ts tự lo.
   useEffect(() => {
-    if (isAdmin && !pathname.startsWith("/admin")) router.replace("/admin");
-  }, [isAdmin, pathname, router]);
-
-  useEffect(() => {
-    if (!isSupabaseBrowserConfigured()) return;
-    const supabase = getSupabaseBrowserClient();
+    let disposed = false;
+    let revision = 0;
     const sync = async () => {
-      const current = await authUserFromSupabaseSession();
-      if (current) login(current);
+      const currentRevision = ++revision;
+      try {
+        const current = await refreshAuthProfile();
+        if (disposed || currentRevision !== revision) return;
+        const destination = adminLandingFor(current?.role, pathname);
+        if (destination) router.replace(destination);
+        setAuthError(false);
+      } catch {
+        if (disposed || currentRevision !== revision) return;
+        setAuthError(true);
+      }
     };
+    markAuthPending();
     void sync();
-    const { data } = supabase.auth.onAuthStateChange(() => {
-      void sync();
+    if (!isSupabaseBrowserConfigured()) return () => { disposed = true; };
+    // Defer SDK calls until its auth-state callback has released the session lock.
+    const timers = new Set<ReturnType<typeof setTimeout>>();
+    const syncVisible = () => {
+      if (document.visibilityState === "visible") void sync();
+    };
+    window.addEventListener("focus", syncVisible);
+    window.addEventListener("online", syncVisible);
+    document.addEventListener("visibilitychange", syncVisible);
+    const interval = window.setInterval(syncVisible, 30_000);
+    const { data } = getSupabaseBrowserClient().auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        revision += 1;
+        handleSupabaseSignOut();
+        markAuthReady();
+        return;
+      }
+      const timer = setTimeout(() => {
+        timers.delete(timer);
+        void sync();
+      }, 0);
+      timers.add(timer);
     });
-    return () => data.subscription.unsubscribe();
-  }, []);
+    return () => {
+      disposed = true;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", syncVisible);
+      window.removeEventListener("online", syncVisible);
+      document.removeEventListener("visibilitychange", syncVisible);
+      for (const timer of timers) clearTimeout(timer);
+      data.subscription.unsubscribe();
+    };
+  }, [pathname, router]);
 
   useEffect(() => {
     if (!schoolId) {
@@ -62,8 +88,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
     }
   }, [schoolId]);
 
-  const content = <AuthModalProvider>{children}</AuthModalProvider>;
-  // Supabase OAuth redirects through Supabase and does not need this browser SDK.
-  // The provider is only needed for the legacy backend Google-token flow.
-  return clientId ? <GoogleOAuthProvider clientId={clientId}>{content}</GoogleOAuthProvider> : content;
+  return (
+    <AuthModalProvider>
+      {authError && (
+        <div role="alert" className="border-b border-danger/25 bg-danger-soft px-5 py-3 text-center text-[13px] text-danger">
+          Không thể khôi phục phiên đăng nhập. <button onClick={() => window.location.reload()} className="font-semibold underline">Tải lại trang</button>
+        </div>
+      )}
+      {children}
+    </AuthModalProvider>
+  );
 }

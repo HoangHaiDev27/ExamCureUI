@@ -40,11 +40,11 @@ export function LoginForm({
       try {
         const data = await loginAPI(email, password);
         login({
+          id: data.id,
           name: data.fullName || data.email || STUDENT.name,
           email: data.email || email,
           avatarUrl: data.avatarUrl,
           token: data.token,
-          refreshToken: data.refreshToken,
           role: data.role,
           schoolId: data.schoolId || "fptu",
         });
