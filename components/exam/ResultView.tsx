@@ -39,7 +39,10 @@ export function ResultView({
   const total = questions.length;
   const { theme } = school;
   const examCode = examCodeFor(attempt.exam.id);
-  const routeId = subjectRouteId(subject.schoolCode, subject.code);
+  const hasSubject = Boolean(subject.code);
+  const retakeHref = hasSubject
+    ? `/exam/${subject.schoolCode}/${subjectRouteId(subject.schoolCode, subject.code)}?exam=${attempt.exam.id}`
+    : "/dashboard?tab=lich-su";
   const [open, setOpen] = useState<number | null>(null);
 
   const { correct, wrong, blank, accuracy } = useMemo(() => summarizeAttempt(questions), [questions]);
@@ -57,7 +60,7 @@ export function ResultView({
           <SchoolMark theme={theme} abbr={school.abbr} size={38} />
           <div className="min-w-0">
             <p className="truncate text-[14px] font-semibold leading-tight">
-              {subject.name} <span className="text-ink-3">· {subject.code}</span>
+              {subject.name || "Môn học không còn tồn tại"}{hasSubject && <span className="text-ink-3"> · {subject.code}</span>}
             </p>
             <p className="text-[12px] text-ink-3">
               {school.abbr} · {theme.systemName} · Mã đề {examCode}
@@ -65,7 +68,7 @@ export function ResultView({
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Link
-              href={`/exam/${subject.schoolCode}/${routeId}?exam=${attempt.exam.id}`}
+              href={retakeHref}
               className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-line-strong bg-paper px-3.5 text-[13px] font-medium text-ink hover:bg-paper-2"
             >
               <RotateCcw size={15} /> Làm lại

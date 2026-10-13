@@ -82,7 +82,9 @@ describe("catalog fetchers", () => {
     expect(await c.listWrongAnswers({ limit: 10 })).toEqual([1]);
     expect(last().url).toBe(`${base}/Me/wrong-answers?limit=10`);
     reply({ materials: [2] });
-    expect(await c.listSchoolMaterials("fptu")).toEqual([2]);
+    expect(await c.listSchoolMaterials("fptu")).toEqual({ materials: [2], truncated: false });
+    reply({ materials: [], truncated: true });
+    expect((await c.listSchoolMaterials("fptu")).truncated).toBe(true);
     expect(last().url).toBe(`${base}/Materials?schoolCode=fptu`);
   });
   it("passes the abort signal", async () => {

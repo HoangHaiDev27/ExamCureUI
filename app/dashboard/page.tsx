@@ -915,7 +915,7 @@ function DashboardView({ user, home }: { user: AuthUser; home: School }) {
               </div>
               {materialsRes.data && (
                 <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
-                  {materialsRes.data.length} tài liệu
+                  {materialsRes.data.materials.length}{materialsRes.data.truncated ? "+" : ""} tài liệu
                 </span>
               )}
             </div>
@@ -924,11 +924,11 @@ function DashboardView({ user, home }: { user: AuthUser; home: School }) {
               <div className="rounded-[10px] border border-line bg-paper"><SectionError message={materialsRes.error} onRetry={materialsRes.reload} /></div>
             ) : materialsRes.loading ? (
               <div className="rounded-[10px] border border-line bg-paper"><SectionLoading rows={4} /></div>
-            ) : (materialsRes.data ?? []).length === 0 ? (
+            ) : (materialsRes.data?.materials ?? []).length === 0 ? (
               <div className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]"><SectionEmpty title="Chưa có tài liệu nào" /></div>
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
-                {(materialsRes.data ?? []).map((doc) => {
+                {(materialsRes.data?.materials ?? []).map((doc) => {
                   const type = fileTypeLabel(doc.version.original_filename);
                   const typeTone = type === "PDF" ? "var(--color-danger)" : type === "PPTX" ? "var(--color-warning)" : "var(--color-blue)";
                   return (

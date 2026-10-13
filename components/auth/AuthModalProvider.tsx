@@ -13,7 +13,7 @@ import { LandingLoginModal } from "@/components/landing/LandingLoginModal";
 export type AuthModalMode = "login" | "register";
 
 type AuthModalContextValue = {
-  openAuth: (mode?: AuthModalMode) => void;
+  openAuth: (mode?: AuthModalMode, redirectTo?: string) => void;
 };
 
 const AuthModalContext = createContext<AuthModalContextValue | null>(null);
@@ -21,15 +21,18 @@ const AuthModalContext = createContext<AuthModalContextValue | null>(null);
 export function AuthModalProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<AuthModalMode>("login");
+  const [redirectTo, setRedirectTo] = useState<string | undefined>(undefined);
 
-  const openAuth = useCallback((nextMode: AuthModalMode = "login") => {
+  const openAuth = useCallback((nextMode: AuthModalMode = "login", target?: string) => {
     setMode(nextMode);
+    setRedirectTo(target);
     setOpen(true);
   }, []);
 
   const closeAuth = useCallback(() => {
     setOpen(false);
     setMode("login");
+    setRedirectTo(undefined);
   }, []);
 
   const value = useMemo(() => ({ openAuth }), [openAuth]);
@@ -40,6 +43,7 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
       <LandingLoginModal
         open={open}
         mode={mode}
+        redirectTo={redirectTo}
         onModeChange={setMode}
         onClose={closeAuth}
       />

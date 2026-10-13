@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/Logo";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useAuth, useAuthReady } from "@/lib/auth";
@@ -59,20 +59,40 @@ export function ErrorCard({ message, onRetry }: { message: string; onRetry: () =
   );
 }
 
-/** Renders children once a signed-in user is available; otherwise loading or the sign-in prompt. */
-export function RequireUser({ children }: { children: (user: AuthUser) => ReactNode }) {
+/**
+ * Renders children for a signed-in user; otherwise loading or the sign-in prompt.
+ * With `latch`, once a user was seen the children stay mounted through later
+ * transient auth changes (token refresh failures, other tabs), so in-progress work is never unmounted.
+ */
+export function RequireUser({
+  children,
+  latch = false,
+}: {
+  children: (user: AuthUser) => ReactNode;
+  latch?: boolean;
+}) {
   const user = useAuth();
   const ready = useAuthReady();
   const { openAuth } = useAuthModal();
+  const [kept, setKept] = useState<AuthUser | null>(null);
+  if (latch && user && kept?.id !== user.id) setKept(user);
+  const active = user ?? (latch ? kept : null);
+  if (active) return <>{children(active)}</>;
   if (!ready) return <LoadingCard label="Đang tải…" />;
-  if (!user)
-    return (
-      <StatusCard
-        title="Đăng nhập để tiếp tục"
-        actions={<button type="button" onClick={() => openAuth("login")} className={primaryAction}>Đăng nhập</button>}
-      >
-        Bạn cần đăng nhập để làm bài thi và lưu kết quả.
-      </StatusCard>
-    );
-  return <>{children(user)}</>;
+  return (
+    <StatusCard
+      title="Đăng nhập để tiếp tục"
+      actions={
+        <button
+          type="button"
+          onClick={() => openAuth("login", window.location.pathname + window.location.search)}
+          className={primaryAction}
+        >
+          Đăng nhập
+        </button>
+      }
+    >
+      Bạn cần đăng nhập để làm bài thi và lưu kết quả.
+    </StatusCard>
+  );
 }

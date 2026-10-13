@@ -28,7 +28,9 @@ export function LandingLoginModal({
   mode,
   onModeChange,
   onClose,
+  redirectTo = "/dashboard",
 }: {
+  redirectTo?: string;
   open: boolean;
   mode: AuthModalMode;
   onModeChange: (mode: AuthModalMode) => void;
@@ -159,12 +161,12 @@ export function LandingLoginModal({
           <div className="[&_button[type='submit']]:shadow-[0_1px_2px_rgba(200,79,29,0.3)]">
             {isLogin ? (
               <LoginForm
-                redirectTo="/dashboard"
+                redirectTo={redirectTo}
                 onSuccess={closeModal}
               />
             ) : (
               <RegisterForm
-                redirectTo="/dashboard"
+                redirectTo={redirectTo}
                 onSuccess={closeModal}
               />
             )}

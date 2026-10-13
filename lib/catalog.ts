@@ -58,6 +58,8 @@ export interface AttemptAnswerInput {
 export interface SubmitAttemptInput {
   answers: AttemptAnswerInput[];
   spentSec: number;
+  /** Idempotency key: resubmitting the same id returns the existing attempt. */
+  clientAttemptId?: string;
 }
 export interface SubmitAttemptResult {
   attemptId: string;
@@ -254,16 +256,20 @@ export async function listWrongAnswers(
     )
   ).items;
 }
+export interface SchoolMaterialsPage {
+  materials: SchoolMaterial[];
+  /** True when the list was capped at 200. */
+  truncated: boolean;
+}
 export async function listSchoolMaterials(
   schoolCode: string,
   signal?: AbortSignal,
-): Promise<SchoolMaterial[]> {
-  return (
-    await get<{ materials: SchoolMaterial[] }>(
-      `/Materials${qs({ schoolCode })}`,
-      signal,
-    )
-  ).materials;
+): Promise<SchoolMaterialsPage> {
+  const data = await get<{ materials: SchoolMaterial[]; truncated?: boolean }>(
+    `/Materials${qs({ schoolCode })}`,
+    signal,
+  );
+  return { materials: data.materials, truncated: Boolean(data.truncated) };
 }
 
 export async function listSubjectMaterials(

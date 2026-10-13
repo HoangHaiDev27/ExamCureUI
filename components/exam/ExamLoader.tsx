@@ -17,20 +17,29 @@ import {
 import { toRoomQuestions } from "@/lib/exam-helpers";
 import { useResource } from "@/lib/useResource";
 import type { School } from "@/lib/types";
-import { ExamRoom } from "./ExamRoom";
+import { ExamRoom, type RoomStudent } from "./ExamRoom";
 import { ErrorCard, LoadingCard, RequireUser, StatusCard, primaryAction, secondaryAction } from "./status";
+
+type Student = RoomStudent;
 
 type ExamResult = { kind: "ok"; exam: ExamDetail } | { kind: "missing" } | { kind: "empty" };
 
 export function ExamLoader({ school, routeId, examId }: { school: School; routeId: string; examId?: string }) {
   return (
-    <RequireUser>
-      {() => <SubjectStage school={school} routeId={routeId} examId={examId} />}
+    <RequireUser latch>
+      {(user) => (
+        <SubjectStage
+          school={school}
+          routeId={routeId}
+          examId={examId}
+          student={{ id: user.id ?? "", name: user.name, mssv: user.mssv }}
+        />
+      )}
     </RequireUser>
   );
 }
 
-function SubjectStage({ school, routeId, examId }: { school: School; routeId: string; examId?: string }) {
+function SubjectStage({ school, routeId, examId, student }: { school: School; routeId: string; examId?: string; student: Student }) {
   const code = codeFromRouteId(school.id, routeId);
   const load = useCallback(
     async (signal: AbortSignal): Promise<CatalogSubject | null> =>
@@ -48,11 +57,11 @@ function SubjectStage({ school, routeId, examId }: { school: School; routeId: st
       />
     );
   return examId
-    ? <ExamStage key={examId} school={school} subject={res.data} examId={examId} />
-    : <ExamListStage school={school} subject={res.data} />;
+    ? <ExamStage key={examId} school={school} subject={res.data} examId={examId} student={student} />
+    : <ExamListStage school={school} subject={res.data} student={student} />;
 }
 
-function ExamListStage({ school, subject }: { school: School; subject: CatalogSubject }) {
+function ExamListStage({ school, subject, student }: { school: School; subject: CatalogSubject; student: Student }) {
   const router = useRouter();
   const load = useCallback((signal: AbortSignal) => listSubjectExams(subject.id, signal), [subject.id]);
   const res = useResource(load, true);
@@ -66,7 +75,7 @@ function ExamListStage({ school, subject }: { school: School; subject: CatalogSu
         actions={<Link href="/dashboard?tab=de-thi" className={primaryAction}>Xem đề thi khác</Link>}
       />
     );
-  if (exams.length === 1) return <ExamStage key={exams[0]!.id} school={school} subject={subject} examId={exams[0]!.id} />;
+  if (exams.length === 1) return <ExamStage key={exams[0]!.id} school={school} subject={subject} examId={exams[0]!.id} student={student} />;
   return (
     <div className="min-h-[100dvh] bg-paper-2 px-5 py-10">
       <div className="mx-auto max-w-xl">
@@ -101,7 +110,7 @@ function ExamListStage({ school, subject }: { school: School; subject: CatalogSu
   );
 }
 
-function ExamStage({ school, subject, examId }: { school: School; subject: CatalogSubject; examId: string }) {
+function ExamStage({ school, subject, examId, student }: { school: School; subject: CatalogSubject; examId: string; student: Student }) {
   const load = useCallback(async (signal: AbortSignal): Promise<ExamResult> => {
     try {
       return { kind: "ok", exam: await getExam(examId, signal) };
@@ -133,6 +142,7 @@ function ExamStage({ school, subject, examId }: { school: School; subject: Catal
   return (
     <ExamRoom
       key={exam.id}
+      student={student}
       school={school}
       subject={{ id: subject.id, code: subject.code, name: subject.name }}
       exam={{ id: exam.id, title: exam.title, durationMinutes: exam.durationMinutes }}

@@ -22,7 +22,9 @@ import { submitAttempt, subjectRouteId } from "@/lib/catalog";
 import { buildSubmitPayload, type RoomQuestion } from "@/lib/exam-helpers";
 import { SchoolMark } from "@/components/SchoolMark";
 import { examCodeFor } from "@/lib/student";
-import { useAuth } from "@/lib/auth";
+import { ApiError } from "@/lib/api";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import { clearDraft, loadDraft, newDraft, remainingSec, saveDraft } from "@/lib/exam-draft";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -35,6 +37,11 @@ function fmt(sec: number): string {
 }
 
 export type RoomSubject = Pick<Subject, "id" | "code" | "name">;
+export interface RoomStudent {
+  id: string;
+  name: string;
+  mssv?: string | undefined;
+}
 export interface RoomExam {
   id: string;
   title: string;
@@ -45,10 +52,12 @@ export function ExamRoom({
   school,
   subject,
   exam,
+  student,
   questions,
   positions,
 }: {
   school: School;
+  student: RoomStudent;
   subject: RoomSubject;
   exam: RoomExam;
   questions: RoomQuestion[];
@@ -59,16 +68,21 @@ export function ExamRoom({
   const total = questions.length;
   const { theme } = school;
   const examCode = examCodeFor(subject.id);
-  const user = useAuth();
-  const studentName = user?.name?.trim() || "—";
-  const mssv = user?.mssv?.trim() || "—";
+  const { openAuth } = useAuthModal();
+  const studentName = student.name?.trim() || "—";
+  const mssv = student.mssv?.trim() || "—";
   const durationSec = exam.durationMinutes * 60;
   const routeId = subjectRouteId(school.id, subject.code);
 
-  const [answers, setAnswers] = useState<number[]>(() => Array(total).fill(-1));
-  const [flagged, setFlagged] = useState<boolean[]>(() => Array(total).fill(false));
+  // Restore an unsubmitted draft (same user + exam) so a remount or reload keeps answers and the real deadline.
+  const [draft] = useState(
+    () => loadDraft(student.id, exam.id, total) ?? newDraft(total, Date.now(), crypto.randomUUID()),
+  );
+  const [answers, setAnswers] = useState<number[]>(draft.answers);
+  const [flagged, setFlagged] = useState<boolean[]>(draft.flagged);
   const [current, setCurrent] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(durationSec);
+  const [timeLeft, setTimeLeft] = useState(() => remainingSec(draft.startedAt, durationSec, Date.now()));
+  const [authExpired, setAuthExpired] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
@@ -83,16 +97,27 @@ export function ExamRoom({
   const flaggedCount = flagged.filter(Boolean).length;
   const danger = timeLeft <= 300;
 
+  useEffect(() => {
+    saveDraft(student.id, exam.id, {
+      answers,
+      flagged,
+      startedAt: draft.startedAt,
+      clientAttemptId: draft.clientAttemptId,
+    });
+  }, [answers, flagged, student.id, exam.id, draft]);
+
   const finish = useCallback(async () => {
     if (submittedRef.current) return;
     submittedRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
+    setAuthExpired(false);
     try {
-      const result = await submitAttempt(
-        exam.id,
-        buildSubmitPayload(questions, positions, answers, durationSec - timeLeft),
-      );
+      const result = await submitAttempt(exam.id, {
+        ...buildSubmitPayload(questions, positions, answers, durationSec - timeLeft),
+        clientAttemptId: draft.clientAttemptId,
+      });
+      clearDraft(student.id, exam.id);
       setAttemptId(result.attemptId);
       if (school.id === "fptu") {
         setSubmitOpen(false);
@@ -103,20 +128,21 @@ export function ExamRoom({
     } catch (reason) {
       // Keep the answers on screen and allow another attempt.
       submittedRef.current = false;
+      if (reason instanceof ApiError && reason.status === 401) setAuthExpired(true);
       setSubmitError(reason instanceof Error ? reason.message : "Không thể nộp bài. Vui lòng thử lại.");
       setSubmitOpen(true);
     } finally {
       setSubmitting(false);
     }
-  }, [answers, questions, positions, exam.id, durationSec, timeLeft, school.id, routeId, router]);
+  }, [answers, questions, positions, exam.id, durationSec, timeLeft, school.id, routeId, router, draft, student.id]);
 
   // Countdown
   useEffect(() => {
     const id = setInterval(() => {
-      setTimeLeft((t) => (t <= 1 ? 0 : t - 1));
+      setTimeLeft(remainingSec(draft.startedAt, durationSec, Date.now()));
     }, 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [draft.startedAt, durationSec]);
 
   // Auto-submit when time runs out
   useEffect(() => {
@@ -426,6 +452,8 @@ export function ExamRoom({
             onConfirm={() => void finish()}
             submitting={submitting}
             error={submitError}
+            authExpired={authExpired}
+            onRelogin={() => openAuth("login", window.location.pathname + window.location.search)}
             schoolId={school.id}
           />
         )}
@@ -676,6 +704,8 @@ export function ExamRoom({
           onConfirm={() => void finish()}
           submitting={submitting}
           error={submitError}
+          authExpired={authExpired}
+          onRelogin={() => openAuth("login", window.location.pathname + window.location.search)}
           schoolId={school.id}
         />
       )}
@@ -1229,6 +1259,8 @@ function SubmitModal({
   onConfirm,
   submitting,
   error,
+  authExpired,
+  onRelogin,
   schoolId,
 }: {
   total: number;
@@ -1240,6 +1272,8 @@ function SubmitModal({
   onConfirm: () => void;
   submitting: boolean;
   error: string | null;
+  authExpired: boolean;
+  onRelogin: () => void;
   schoolId?: string;
 }) {
   const unanswered = total - answeredCount;
@@ -1306,6 +1340,18 @@ function SubmitModal({
             <div role="alert" className="mt-4 rounded-[7px] border border-danger bg-danger-soft px-3.5 py-3 text-[13.5px] text-danger font-sans">
               {isFPTU ? "Submit failed. Your answers are kept — please try again." : "Chưa nộp được bài. Câu trả lời của bạn vẫn được giữ lại, hãy thử nộp lại."}
               <span className="mt-1 block text-[12.5px] opacity-80">{error}</span>
+              {authExpired && (
+                <span className="mt-2 block">
+                  {isFPTU ? "Your session expired. Sign in again, then press Retry." : "Phiên đăng nhập đã hết hạn. Đăng nhập lại rồi bấm Nộp lại."}
+                  <button
+                    type="button"
+                    onClick={onRelogin}
+                    className="mt-2 block rounded-[6px] border border-danger bg-paper px-3 py-1.5 text-[12.5px] font-semibold text-danger"
+                  >
+                    {isFPTU ? "Sign in" : "Đăng nhập lại"}
+                  </button>
+                </span>
+              )}
             </div>
           )}
 
