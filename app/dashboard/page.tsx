@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -18,25 +18,57 @@ import {
   ArrowLeft,
   ArrowUpRight,
   Eye,
-  ChevronLeft,
   ChevronRight,
   ChevronDown,
   Menu,
   Search,
   LogOut,
-  UserRound,
   X,
 } from "lucide-react";
 import { getSchool } from "@/lib/schools";
-import { getSubjects } from "@/lib/subjects";
-import type { Subject } from "@/lib/types";
+import type { School } from "@/lib/types";
 import { SchoolMark } from "@/components/SchoolMark";
 import { Logo } from "@/components/Logo";
-import { FlashcardWorkspace } from "@/components/FlashcardWorkspace";
-import { STUDENT, mssvFor } from "@/lib/student";
+import { useAuthModal } from "@/components/auth/AuthModalProvider";
+import {
+  Avatar,
+  DashboardAccountControl,
+  ProgressChart,
+  SectionEmpty,
+  SectionError,
+  SectionLoading,
+  SettingToggle,
+  Stat,
+} from "@/components/dashboard/parts";
 import { classify, TONE_COLOR } from "@/lib/grade";
-import { logout, useAuth, initials } from "@/lib/auth";
+import { logout, useAuth, useAuthReady, type AuthUser } from "@/lib/auth";
 import { FPT_DASHBOARD_ACCENT } from "@/lib/theme";
+import {
+  difficultyLabel,
+  formatFileSize,
+  formatRelativeTime,
+  getDashboard,
+  listMyAttempts,
+  listSchoolMaterials,
+  listSubjectMaterials,
+  listSubjects,
+  listWrongAnswers,
+  type AttemptItem,
+  type CatalogSubject,
+  type DifficultyCode,
+} from "@/lib/catalog";
+import {
+  dedupeMaterials,
+  examHref,
+  fileTypeLabel,
+  formatDate,
+  groupByTerm,
+  materialHref,
+  resultHref,
+  selectQuickAccess,
+  trendDelta,
+} from "@/lib/dashboard-helpers";
+import { useResource } from "@/lib/useResource";
 
 const NAV_GROUPS = [
   {
@@ -66,125 +98,63 @@ const NAV_GROUPS = [
 
 const DASHBOARD_TAB_IDS = new Set(NAV_GROUPS.flatMap((group) => group.items.map((item) => item.id)));
 
-const TREND = [6.2, 6.6, 6.4, 7.3, 7.0, 7.7, 8.1, 8.4];
-
-/** Single source of truth for the overview stat strip — also reused in the account modal. */
-const TOTAL_EXAMS_DONE = 48;
-const AVG_SCORE = 7.8;
-const SUBJECTS_IN_PROGRESS = 6;
-const RANK_PERCENTILE = 12;
-
 const capitalizeFirst = (value: string) => value.length ? value.charAt(0).toUpperCase() + value.slice(1) : value;
 
-const CHAPTERS_DATA: Record<string, { title: string; slides: string[] }[]> = {
-  default: [
-    {
-      title: "Chương 1: Tổng quan & Giới thiệu chung",
-      slides: [
-        "Slide 1: Khái niệm cơ bản và vai trò của học phần trong chuyên ngành.",
-        "Slide 2: Các nội dung cốt lõi và lộ trình ôn luyện thi thử hiệu quả.",
-        "Slide 3: Các tài liệu tham khảo chính và cấu trúc đề thi cuối kỳ."
-      ]
-    },
-    {
-      title: "Chương 2: Các nguyên lý nền tảng cốt lõi",
-      slides: [
-        "Slide 1: Định nghĩa chi tiết các thành phần chính và sơ đồ hệ thống.",
-        "Slide 2: Ví dụ thực tế minh họa phương pháp triển khai và phân tích.",
-        "Slide 3: Bài tập tự luyện nhanh và câu hỏi thảo luận ôn thi."
-      ]
-    },
-    {
-      title: "Chương 3: Quy trình nâng cao và thực tiễn",
-      slides: [
-        "Slide 1: Phân tích các trường hợp đặc biệt và tối ưu hóa hiệu suất.",
-        "Slide 2: Phương pháp phát hiện lỗi sai thường gặp khi làm bài thi.",
-        "Slide 3: Tổng kết chương và các mẹo ghi nhớ nhanh."
-      ]
-    }
-  ],
-  "csd201": [
-    {
-      title: "Chương 1: Độ phức tạp thuật toán (Big-O)",
-      slides: [
-        "Slide 1: Khái niệm độ phức tạp thời gian T(n) và độ phức tạp không gian S(n). Định nghĩa Big-O, Big-Omega, Big-Theta.",
-        "Slide 2: Quy tắc cộng, quy tắc nhân khi phân tích thuật toán. Phân tích vòng lặp đơn, vòng lặp lồng nhau.",
-        "Slide 3: Ví dụ thực tế: Thuật toán tìm kiếm nhị phân có độ phức tạp O(log n), Bubble Sort có O(n^2)."
-      ]
-    },
-    {
-      title: "Chương 2: Danh sách liên kết (Linked List)",
-      slides: [
-        "Slide 1: Cấu trúc của một Node (Data & Pointer). Sự khác nhau giữa mảng tĩnh và danh sách liên kết.",
-        "Slide 2: Danh sách liên kết đơn (Singly Linked List), danh sách liên kết đôi (Doubly Linked List). Thao tác thêm/xóa ở đầu, cuối và vị trí bất kỳ.",
-        "Slide 3: Thuật toán đảo ngược danh sách liên kết đơn và tìm điểm giữa (thuật toán rùa và thỏ)."
-      ]
-    },
-    {
-      title: "Chương 3: Ngăn xếp (Stack) & Hàng đợi (Queue)",
-      slides: [
-        "Slide 1: Khái niệm Stack (LIFO - Last In First Out). Các hàm cơ bản: push(), pop(), peek(), isEmpty().",
-        "Slide 2: Khái niệm Queue (FIFO - First In First Out). Các hàm cơ bản: enqueue(), dequeue(). Khái niệm hàng đợi vòng (Circular Queue).",
-        "Slide 3: Ứng dụng thực tế: Tính toán biểu thức Ba Lan (Postfix), thuật toán DFS (sử dụng Stack) và BFS (sử dụng Queue)."
-      ]
-    },
-    {
-      title: "Chương 4: Cây nhị phân tìm kiếm (BST)",
-      slides: [
-        "Slide 1: Định nghĩa Cây nhị phân và Cây nhị phân tìm kiếm (BST). Tính chất: con trái nhỏ hơn cha, con phải lớn hơn cha.",
-        "Slide 2: Các phương pháp duyệt cây: Tiền thứ tự (Pre-order), Trung thứ tự (In-order -> cho dãy tăng), Hậu thứ tự (Post-order).",
-        "Slide 3: Thao tác tìm kiếm, thêm mới và xóa nút trên BST (xử lý 3 trường hợp xóa nút: nút lá, nút có 1 con, nút có 2 con)."
-      ]
-    }
-  ],
-  "dbi202": [
-    {
-      title: "Chương 1: Mô hình cơ sở dữ liệu quan hệ (Relational Model)",
-      slides: [
-        "Slide 1: Khái niệm thực thể (Entity), thuộc tính (Attribute), quan hệ (Relationship). Sơ đồ thực thể liên kết ERD.",
-        "Slide 2: Khóa chính (Primary Key), khóa ngoại (Foreign Key). Các ràng buộc toàn vẹn dữ liệu.",
-        "Slide 3: Chuyển đổi từ sơ đồ ERD sang lược đồ quan hệ các bảng."
-      ]
-    },
-    {
-      title: "Chương 2: Ngôn ngữ truy vấn SQL căn bản",
-      slides: [
-        "Slide 1: Cấu trúc câu lệnh SELECT, WHERE, ORDER BY. Các phép toán so sánh và logic.",
-        "Slide 2: Phép toán kết bảng (JOIN): INNER JOIN, LEFT JOIN, RIGHT JOIN, FULL OUTER JOIN.",
-        "Slide 3: Các hàm gộp nhóm dữ liệu: SUM, AVG, COUNT, MIN, MAX đi kèm câu lệnh GROUP BY và HAVING."
-      ]
-    },
-    {
-      title: "Chương 3: Truy vấn con (Subquery) & Gom nhóm",
-      slides: [
-        "Slide 1: Định nghĩa Subquery. Phân loại truy vấn con độc lập (Self-contained) và truy vấn con tương quan (Correlated).",
-        "Slide 2: Sử dụng các toán tử EXISTS, IN, ANY, ALL kết hợp với truy vấn con.",
-        "Slide 3: Các biểu thức bảng phổ biến (CTE - Common Table Expressions) dùng với lệnh WITH."
-      ]
-    }
-  ],
-  "pro192": [
-    {
-      title: "Chương 1: Các nguyên lý cơ bản của OOP",
-      slides: [
-        "Slide 1: Định nghĩa Lập trình hướng đối tượng (OOP). Bốn tính chất cốt lõi: Đóng gói (Encapsulation), Kế thừa (Inheritance), Đa hình (Polymorphism), Trừu tượng (Abstraction).",
-        "Slide 2: Khái niệm Lớp (Class) và Đối tượng (Object). Cách khai báo thuộc tính và phương thức trong Java.",
-        "Slide 3: Hàm khởi tạo (Constructor) - Default constructor và Parameterized constructor. Từ khóa 'this'."
-      ]
-    },
-    {
-      title: "Chương 2: Tính kế thừa (Inheritance) & Đa hình (Polymorphism)",
-      slides: [
-        "Slide 1: Từ khóa 'extends' trong Java. Kế thừa đơn và tại sao Java không hỗ trợ đa kế thừa trực tiếp.",
-        "Slide 2: Cơ chế nạp chồng phương thức (Method Overloading) và ghi đè phương thức (Method Overriding). Từ khóa 'super'.",
-        "Slide 3: Ép kiểu đối tượng (Upcasting & Downcasting). Liên kết động (Dynamic binding) khi chạy chương trình."
-      ]
-    }
-  ]
+const DIFFICULTY_TONE: Record<DifficultyCode, string> = {
+  basic: "var(--color-green)",
+  medium: "#c98a06",
+  advanced: "var(--color-danger)",
 };
 
+const examMeta = (s: CatalogSubject) =>
+  [`${s.publishedExamCount} đề`, s.durationMin != null ? `${s.durationMin} phút` : null, difficultyLabel(s.difficulty)]
+    .filter(Boolean)
+    .join(" · ");
+
 export default function DashboardPage() {
+  const user = useAuth();
+  const ready = useAuthReady();
+  const { openAuth } = useAuthModal();
+
+  if (!ready) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-paper-2">
+        <div role="status" className="text-[14px] text-ink-3">Đang tải bảng điều khiển…</div>
+      </div>
+    );
+  }
+  if (!user) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-paper-2 p-6">
+        <div className="max-w-sm rounded-[14px] border border-line bg-paper p-8 text-center shadow-[var(--shadow-1)]">
+          <Logo size={28} />
+          <h1 className="mt-4 font-display text-[22px] font-semibold text-ink">Đăng nhập để xem bảng điều khiển</h1>
+          <p className="mt-1.5 text-[14px] text-ink-2">Kết quả thi và tiến độ ôn tập của bạn được lưu theo tài khoản.</p>
+          <button
+            type="button"
+            onClick={() => openAuth("login")}
+            className="mt-5 inline-flex h-10 items-center rounded-[7px] bg-orange px-5 text-[13.5px] font-semibold text-white hover:bg-orange-dark"
+          >
+            Đăng nhập
+          </button>
+        </div>
+      </div>
+    );
+  }
+  const home = user.schoolId ? getSchool(user.schoolId) : undefined;
+  if (!home) {
+    return (
+      <div className="grid min-h-screen place-items-center bg-paper-2 p-6">
+        <p role="alert" className="text-[14px] text-danger">Tài khoản chưa được gắn với một trường hợp lệ.</p>
+      </div>
+    );
+  }
+  return <DashboardView user={user} home={home} />;
+}
+
+function DashboardView({ user, home }: { user: AuthUser; home: School }) {
   const router = useRouter();
+  const schoolId = home.id;
   const [activeTab, setActiveTab] = useState("tong-quan");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
@@ -195,15 +165,46 @@ export default function DashboardPage() {
   const [autoExpandTerms, setAutoExpandTerms] = useState(true);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const mobileMenuPanelRef = useRef<HTMLDivElement>(null);
-  const user = useAuth();
-  const schoolId = user?.schoolId || "fptu";
-  const home = getSchool(schoolId)!;
-  const subjects = getSubjects(schoolId);
-  const mssv = user ? (user.email?.split("@")[0].toUpperCase() || mssvFor(schoolId)) : mssvFor(schoolId);
-  const suggested = subjects.slice(0, 5);
 
-  const studentName = user?.name || STUDENT.name;
-  const avatarUrl = user?.avatarUrl;
+  const mssv = user.mssv?.trim() || "—";
+  const studentName = user.name;
+  const avatarUrl = user.avatarUrl;
+
+  // Dữ liệu từ API: tải ngay khi vào trang (môn học, tổng quan), các tab khác tải khi mở lần đầu.
+  const loadSubjects = useCallback((signal: AbortSignal) => listSubjects(schoolId, { signal }), [schoolId]);
+  const loadDashboard = useCallback((signal: AbortSignal) => getDashboard(signal), []);
+  const loadSchoolMaterials = useCallback((signal: AbortSignal) => listSchoolMaterials(schoolId, signal), [schoolId]);
+  const loadWrongAnswers = useCallback((signal: AbortSignal) => listWrongAnswers({ limit: 50, signal }), []);
+  const loadHistory = useCallback((signal: AbortSignal) => listMyAttempts({ limit: 20, signal }), []);
+  const subjectsRes = useResource(loadSubjects, true);
+  const dashRes = useResource(loadDashboard, true);
+  const materialsRes = useResource(loadSchoolMaterials, activeTab === "tai-lieu");
+  const wrongRes = useResource(loadWrongAnswers, activeTab === "so-tay-sai");
+  const historyRes = useResource(loadHistory, activeTab === "lich-su");
+
+  const [moreHistory, setMoreHistory] = useState<{ items: AttemptItem[]; next: string | null | undefined }>({ items: [], next: undefined });
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+  const historyItems = [...(historyRes.data?.attempts ?? []), ...moreHistory.items];
+  const historyNext = moreHistory.next !== undefined ? moreHistory.next : (historyRes.data?.nextBefore ?? null);
+  const loadMoreHistory = async () => {
+    if (!historyNext) return;
+    setMoreLoading(true);
+    setMoreError(null);
+    try {
+      const page = await listMyAttempts({ limit: 20, before: historyNext });
+      setMoreHistory((current) => ({ items: [...current.items, ...page.attempts], next: page.nextBefore }));
+    } catch (reason) {
+      setMoreError(reason instanceof Error ? reason.message : "Không thể tải thêm.");
+    } finally {
+      setMoreLoading(false);
+    }
+  };
+
+  const subjects = useMemo(() => subjectsRes.data ?? [], [subjectsRes.data]);
+  const dash = dashRes.data;
+  const quickAccess = useMemo(() => selectQuickAccess(subjects, dash?.recentAttempts ?? []), [subjects, dash]);
+  const examSubjects = useMemo(() => subjects.filter((s) => s.publishedExamCount > 0), [subjects]);
 
   const signOut = async () => {
     setIsProfileMenuOpen(false);
@@ -213,46 +214,16 @@ export default function DashboardPage() {
     catch { window.alert("Không thể đăng xuất. Vui lòng thử lại."); }
   };
 
-  const getMockSubject = (code: string, fallbackIndex: number) =>
-    subjects.find((subject) => subject.code.toLowerCase() === code.toLowerCase()) || subjects[fallbackIndex];
-  const historyMocks = [
-    { code: "CSD201", score: 8.4, when: "Hôm nay, 09:42" },
-    { code: "DBI202", score: 7.8, when: "Hôm qua, 20:15" },
-    { code: "PRO192", score: 9.0, when: "3 ngày trước" },
-    { code: "MAS291", score: 7.2, when: "5 ngày trước" },
-    { code: "PRF192", score: 6.8, when: "12/08/2026" },
-    { code: "MAE101", score: 8.7, when: "08/08/2026" },
-    { code: "ECO111", score: 7.5, when: "02/08/2026" },
-    { code: "WED201c", score: 9.2, when: "28/07/2026" },
-  ];
-  const history = historyMocks.map((item, index) => {
-    const subject = getMockSubject(item.code, index);
-    return {
-      code: subject?.code || item.code,
-      name: subject?.name || `Học phần ${item.code}`,
-      score: item.score,
-      when: item.when,
-    };
-  });
-
   const givenName = studentName.trim().split(/\s+/).pop() || studentName;
-  const latestAttempt = history[0];
-  const weakestSuggested = suggested.reduce<Subject | null>((weakest, s) => {
-    if (s.lastScore == null) return weakest;
-    if (!weakest || (weakest.lastScore ?? Infinity) > s.lastScore) return s;
-    return weakest;
-  }, null);
-
-  // States cho Luyện câu hỏi nhanh (Quick Quiz)
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [quizChecked, setQuizChecked] = useState(false);
+  const latestAttempt = dash?.recentAttempts[0] ?? null;
+  const trendScores = dash?.trend.map((point) => point.score) ?? [];
+  const delta = trendDelta(trendScores);
 
   // States cho danh mục môn học
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedFaculty, setSelectedFaculty] = useState<string | null>(null);
   const [selectedTerm, setSelectedTerm] = useState<number | null>(null);
-  const [selectedSubjectForDocs, setSelectedSubjectForDocs] = useState<Subject | null>(null);
-  const [previewingSlide, setPreviewingSlide] = useState<{ chapterTitle: string; slides: string[]; slideIndex: number } | null>(null);
+  const [selectedSubjectForDocs, setSelectedSubjectForDocs] = useState<CatalogSubject | null>(null);
 
   useEffect(() => {
     const syncTabFromUrl = () => {
@@ -285,15 +256,6 @@ export default function DashboardPage() {
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [isMobileMenuOpen]);
-
-  useEffect(() => {
-    if (!previewingSlide) return;
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPreviewingSlide(null);
-    };
-    document.addEventListener("keydown", closeOnEscape);
-    return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [previewingSlide]);
 
   // Cài đặt hiển thị của người dùng — đồng bộ từ localStorage, cả khi mount lẫn khi đổi ở tab khác.
   useEffect(() => {
@@ -341,33 +303,21 @@ export default function DashboardPage() {
 
   const activeTabLabel = NAV_GROUPS.flatMap((group) => group.items).find((item) => item.id === activeTab)?.label || "Bảng điều khiển";
 
-  const faculties = Array.from(new Set(subjects.map((s) => s.faculty)));
+  const faculties = Array.from(new Set(subjects.map((s) => s.faculty).filter((f): f is string => Boolean(f))));
+  const allTerms = Array.from(new Set(subjects.flatMap((s) => s.terms))).sort((a, b) => a - b);
   const filteredSubjects = subjects.filter((s) => {
     if (selectedFaculty && s.faculty !== selectedFaculty) return false;
-    if (schoolId === "fptu" && selectedTerm && s.semester !== `Kỳ ${selectedTerm}`) return false;
+    if (selectedTerm && !s.terms.includes(selectedTerm)) return false;
     if (searchQuery) {
       const q = searchQuery.toLowerCase().trim();
       return s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q);
     }
     return true;
   });
-  const fptTermGroups = schoolId === "fptu"
-    ? Array.from({ length: 9 }, (_, index) => {
-        const term = index + 1;
-        return {
-          term,
-          subjects: filteredSubjects.filter((subject) => subject.semester === `Kỳ ${term}`),
-        };
-      }).filter((group) => group.subjects.length > 0)
-    : [];
+  const { groups: termGroups, untermed } = groupByTerm(filteredSubjects.map((s) => s));
+  const visibleTermGroups = selectedTerm ? termGroups.filter((g) => g.term === selectedTerm) : termGroups;
 
-  const DIFFICULTY_TONE: Record<Subject["difficulty"], string> = {
-    "Cơ bản": "var(--color-green)",
-    "Trung bình": "#c98a06",
-    "Nâng cao": "var(--color-danger)",
-  };
-
-  const renderSubjectCard = (subject: Subject) => (
+  const renderSubjectCard = (subject: CatalogSubject) => (
     <button
       key={subject.id}
       type="button"
@@ -378,12 +328,18 @@ export default function DashboardPage() {
       <div>
         <div className="flex items-center justify-between gap-3">
           <span className="rounded border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-ink-2">{subject.code}</span>
-          <span className="truncate text-[11px] font-medium text-ink-3">{subject.faculty}</span>
+          {subject.faculty && <span className="truncate text-[11px] font-medium text-ink-3">{subject.faculty}</span>}
         </div>
         <h3 className="mt-2 line-clamp-1 text-[14.5px] font-bold text-ink">{subject.name}</h3>
         <p className="mt-1.5 flex items-center gap-1.5 text-[12px] font-medium text-ink-3">
-          <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: DIFFICULTY_TONE[subject.difficulty] }} aria-hidden="true" />
-          {subject.difficulty}
+          {subject.difficulty && (
+            <>
+              <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: DIFFICULTY_TONE[subject.difficulty] }} aria-hidden="true" />
+              {difficultyLabel(subject.difficulty)} ·{" "}
+            </>
+          )}
+          {subject.publishedExamCount} đề
+          {subject.lastScore != null && <> · Gần nhất <span className="tnum font-semibold text-ink-2">{subject.lastScore.toFixed(1)}</span></>}
         </p>
       </div>
 
@@ -394,78 +350,41 @@ export default function DashboardPage() {
     </button>
   );
 
-  // Mock tài liệu học tập đủ dài để kiểm tra grid và responsive
-  const documentMocks = [
-    { code: "CSD201", title: "Giáo trình cấu trúc dữ liệu và giải thuật", type: "PDF", size: "4.8 MB", reads: "1.2k lượt đọc" },
-    { code: "DBI202", title: "Slide chương 3 · Chuẩn hóa cơ sở dữ liệu", type: "PPTX", size: "2.1 MB", reads: "850 lượt đọc" },
-    { code: "PRO192", title: "Tóm tắt lập trình hướng đối tượng bằng Java", type: "PDF", size: "1.5 MB", reads: "2.3k lượt đọc" },
-    { code: "MAS291", title: "Bảng công thức xác suất và thống kê", type: "PDF", size: "980 KB", reads: "1.8k lượt đọc" },
-    { code: "PRF192", title: "Bài tập con trỏ, mảng và chuỗi có lời giải", type: "DOCX", size: "3.4 MB", reads: "764 lượt đọc" },
-    { code: "MAE101", title: "Bộ bài tập đạo hàm và tích phân ôn cuối kỳ", type: "PDF", size: "6.2 MB", reads: "1.1k lượt đọc" },
-    { code: "ECO111", title: "Sơ đồ tổng hợp cung, cầu và cân bằng thị trường", type: "PDF", size: "1.7 MB", reads: "592 lượt đọc" },
-    { code: "WED201c", title: "Slide xây dựng giao diện web responsive", type: "PPTX", size: "8.9 MB", reads: "1.5k lượt đọc" },
-  ];
-  const docsList = documentMocks.map((item, index) => {
-    const subject = getMockSubject(item.code, index);
-    return { ...item, code: subject?.code || item.code };
-  });
-
-  // Câu hỏi trắc nghiệm nhanh mẫu
-  const quizQuestion = {
-    q: "Cho cây nhị phân tìm kiếm (BST). Phát biểu nào sau đây là ĐÚNG nhất về tính chất của cây?",
-    options: [
-      "Phần tử có giá trị khóa nhỏ nhất luôn nằm ở nút gốc của cây.",
-      "Mọi nút con bên trái luôn có giá trị khóa nhỏ hơn nút cha, và mọi nút con bên phải luôn có giá trị khóa lớn hơn nút cha.",
-      "Duyệt cây theo thứ tự trước (Pre-order) luôn cho ra một dãy tăng dần.",
-      "Độ phức tạp của việc tìm kiếm một khóa trên BST luôn là O(log n) bất kể cây lệch hay cân bằng."
-    ],
-    correct: 1,
-    explanation: "Đúng theo định nghĩa cây nhị phân tìm kiếm: Với mỗi nút, các nút thuộc cây con bên trái đều có giá trị nhỏ hơn nút đó và các nút thuộc cây con bên phải đều có giá trị lớn hơn."
+  /** Một dòng môn thi (dùng ở "Tiếp tục ôn tập" và "Đề luyện tập"). */
+  const renderExamRow = (s: CatalogSubject) => {
+    const grade = s.lastScore != null ? classify(s.lastScore) : null;
+    return (
+      <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-paper-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="rounded-[5px] border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-2">{s.code}</span>
+            <h3 className="truncate text-[14.5px] font-semibold text-ink">{s.name}</h3>
+          </div>
+          <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-ink-3">
+            {s.difficulty && <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: DIFFICULTY_TONE[s.difficulty] }} aria-hidden="true" />}
+            {examMeta(s)}
+          </p>
+        </div>
+        {grade && (
+          <span className="hidden items-center gap-1.5 sm:inline-flex">
+            <span className="text-[12px] text-ink-3">Gần nhất</span>
+            <span className="tnum text-[14px] font-semibold" style={{ color: TONE_COLOR[grade.tone] }}>{s.lastScore?.toFixed(1)}</span>
+          </span>
+        )}
+        <Link
+          href={examHref(s.schoolCode, s.code)}
+          className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-orange px-3.5 text-[13px] font-medium text-white shadow-sm hover:shadow transition-colors hover:bg-orange-dark"
+        >
+          <Play size={14} fill="currentColor" /> Vào thi
+        </Link>
+      </div>
+    );
   };
 
-  // Mock câu hỏi sai của user (Sổ tay sửa sai)
-  const incorrectQuestions = [
-    {
-      code: getMockSubject("CSD201", 0)?.code || "CSD201",
-      subject: getMockSubject("CSD201", 0)?.name || "Cấu trúc dữ liệu & Giải thuật",
-      q: "Độ phức tạp thời gian của thuật toán tìm kiếm nhị phân trên mảng đã sắp xếp kích thước n là:",
-      yourAnswer: "O(n)",
-      correctAnswer: "O(log n)",
-      reason: "Bạn đã nhầm lẫn với tìm kiếm tuyến tính. Tìm kiếm nhị phân chia đôi không gian tìm kiếm sau mỗi bước nên độ phức tạp là O(log n)."
-    },
-    {
-      code: getMockSubject("DBI202", 1)?.code || "DBI202",
-      subject: getMockSubject("DBI202", 1)?.name || "Cơ sở dữ liệu",
-      q: "Phát biểu nào sau đây đúng về khóa chính (Primary Key) trong một bảng dữ liệu quan hệ?",
-      yourAnswer: "Cho phép chứa giá trị NULL nhưng không được trùng lặp.",
-      correctAnswer: "Bắt buộc không được chứa giá trị NULL và không được trùng lặp (Unique).",
-      reason: "Khóa chính dùng để định danh duy nhất cho một dòng trong bảng, do đó nó không bao giờ được phép chứa giá trị NULL."
-    },
-    {
-      code: getMockSubject("PRO192", 2)?.code || "PRO192",
-      subject: getMockSubject("PRO192", 2)?.name || "Lập trình hướng đối tượng",
-      q: "Trong Java, từ khóa nào được dùng để gọi constructor của lớp cha?",
-      yourAnswer: "this",
-      correctAnswer: "super",
-      reason: "super() gọi constructor của lớp cha, còn this() gọi một constructor khác trong cùng lớp. Hai lời gọi này phải nằm ở dòng đầu tiên của constructor."
-    },
-    {
-      code: getMockSubject("MAS291", 3)?.code || "MAS291",
-      subject: getMockSubject("MAS291", 3)?.name || "Xác suất thống kê",
-      q: "Một biến cố chắc chắn có xác suất bằng bao nhiêu?",
-      yourAnswer: "0.5",
-      correctAnswer: "1",
-      reason: "Biến cố chắc chắn luôn xảy ra trong không gian mẫu nên xác suất của nó bằng 1. Xác suất bằng 0 dành cho biến cố không thể xảy ra."
-    },
-    {
-      code: getMockSubject("PRF192", 4)?.code || "PRF192",
-      subject: getMockSubject("PRF192", 4)?.name || "Kỹ thuật lập trình C",
-      q: "Chỉ số hợp lệ cuối cùng của mảng có n phần tử trong C là bao nhiêu?",
-      yourAnswer: "n",
-      correctAnswer: "n - 1",
-      reason: "Mảng trong C được đánh chỉ số từ 0. Vì vậy mảng có n phần tử sử dụng các chỉ số từ 0 đến n - 1; truy cập vị trí n sẽ vượt giới hạn."
-    }
-  ];
+  const subjectsGate = (render: () => React.ReactNode) =>
+    subjectsRes.error && !subjectsRes.data
+      ? <SectionError message={subjectsRes.error} onRetry={subjectsRes.reload} />
+      : subjectsRes.loading ? <SectionLoading rows={4} /> : render();
 
   return (
     <div
@@ -521,10 +440,19 @@ export default function DashboardPage() {
                 Truy cập nhanh
               </h3>
               <div className="space-y-0.5 max-h-[180px] overflow-y-auto pr-1">
-                {suggested.map((s) => (
+                {subjectsRes.error && !subjectsRes.data ? (
+                  <div className="px-3 py-1.5 text-[12px] text-danger">
+                    Không tải được.{" "}
+                    <button type="button" onClick={subjectsRes.reload} className="font-semibold underline">Thử lại</button>
+                  </div>
+                ) : subjectsRes.loading ? (
+                  <p className="px-3 py-1.5 text-[12px] text-ink-3" role="status">Đang tải…</p>
+                ) : quickAccess.length === 0 ? (
+                  <p className="px-3 py-1.5 text-[12px] text-ink-3">Chưa có đề thi nào</p>
+                ) : quickAccess.map((s) => (
                   <Link
                     key={s.id}
-                    href={`/exam/${home.id}/${s.id}`}
+                    href={examHref(s.schoolCode, s.code)}
                     className="flex items-center gap-2 rounded-[6px] px-3 py-1.5 text-[12.5px] font-medium text-ink-2 hover:bg-paper-2 hover:text-ink transition-colors w-full text-left"
                   >
                     <span className="shrink-0 rounded bg-paper-2 border border-line px-1.5 py-0.5 font-mono text-[9.5px] text-ink-3">{s.code}</span>
@@ -663,22 +591,36 @@ export default function DashboardPage() {
               <h1 className="mt-1 font-display text-[27px] font-semibold leading-tight text-ink">
                 Chào {givenName}, tiếp tục ôn tập nhé
               </h1>
-              <p className="mt-1.5 text-[14.5px] text-ink-2">
-                Vừa đạt <strong className="tnum font-semibold text-ink">{latestAttempt.score.toFixed(1)}</strong> ở{" "}
-                <span className="font-mono text-[12.5px] text-ink-3">{latestAttempt.code}</span> · {latestAttempt.when.toLowerCase()}.
-                {showDailyNudge && weakestSuggested && (
-                  <> Ưu tiên ôn thêm <strong className="text-ink">{weakestSuggested.name}</strong> — điểm gần nhất còn thấp.</>
-                )}
-              </p>
+              {dash && (
+                <p className="mt-1.5 text-[14.5px] text-ink-2">
+                  {latestAttempt ? (
+                    <>
+                      Vừa đạt <strong className="tnum font-semibold text-ink">{latestAttempt.score.toFixed(1)}</strong> ở{" "}
+                      <span className="font-mono text-[12.5px] text-ink-3">{latestAttempt.subjectCode ?? "—"}</span> · {formatRelativeTime(latestAttempt.submittedAt).toLowerCase()}.
+                      {showDailyNudge && dash.weakestSubject && (
+                        <> Ưu tiên ôn thêm <strong className="text-ink">{dash.weakestSubject.name}</strong> — điểm trung bình còn thấp ({dash.weakestSubject.averageScore.toFixed(1)}).</>
+                      )}
+                    </>
+                  ) : (
+                    <>Bạn chưa làm bài thi nào — hãy bắt đầu với một đề luyện tập để theo dõi tiến độ.</>
+                  )}
+                </p>
+              )}
             </div>
 
             {/* Stat strip */}
-            <div id="tong-quan" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-              <Stat icon={<FileCheck2 size={18} />} value={String(TOTAL_EXAMS_DONE)} label="Đề đã làm" sub="+6 tuần này" tone="ink" />
-              <Stat icon={<Target size={18} />} value={AVG_SCORE.toFixed(1)} label="Điểm trung bình" sub="thang 10" tone="green" />
-              <Stat icon={<BookOpen size={18} />} value={String(SUBJECTS_IN_PROGRESS)} label="Môn đang luyện" tone="blue" />
-              <Stat icon={<Trophy size={18} />} value={`Top ${RANK_PERCENTILE}%`} label="Xếp hạng" sub="cùng khóa" tone="orange" />
-            </div>
+            {dashRes.error && !dash ? (
+              <div className="rounded-[12px] border border-line bg-paper"><SectionError message={dashRes.error} onRetry={dashRes.reload} /></div>
+            ) : !dash ? (
+              <div className="rounded-[12px] border border-line bg-paper"><SectionLoading rows={2} /></div>
+            ) : (
+              <div id="tong-quan" className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                <Stat icon={<FileCheck2 size={18} />} value={String(dash.stats.totalAttempts)} label="Đề đã làm" sub={dash.stats.attemptsThisWeek > 0 ? `+${dash.stats.attemptsThisWeek} tuần này` : undefined} tone="ink" />
+                <Stat icon={<Target size={18} />} value={dash.stats.averageScore != null ? dash.stats.averageScore.toFixed(1) : "—"} label="Điểm trung bình" sub="thang 10" tone="green" />
+                <Stat icon={<BookOpen size={18} />} value={String(dash.stats.subjectsInProgress)} label="Môn đang luyện" tone="blue" />
+                <Stat icon={<Trophy size={18} />} value={dash.stats.rankPercentile != null ? `Top ${dash.stats.rankPercentile}%` : "—"} label="Xếp hạng" sub="cùng trường" tone="orange" />
+              </div>
+            )}
 
             {/* Chart + History grid */}
             <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]" id="thong-ke">
@@ -686,21 +628,31 @@ export default function DashboardPage() {
                 <div className="flex items-start justify-between">
                   <div>
                     <h2 className="text-[15px] font-semibold text-ink">Tiến bộ điểm số</h2>
-                    <p className="text-[12.5px] text-ink-3">8 lần thi thử gần nhất</p>
+                    <p className="text-[12.5px] text-ink-3">{trendScores.length > 0 ? `${trendScores.length} lần thi gần nhất` : "Các lần thi thử gần nhất"}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="rounded-[4px] px-2 py-1 text-[12px] font-bold text-white"
-                      style={{ background: TONE_COLOR[classify(TREND[TREND.length - 1]).tone] }}
-                    >
-                      Xếp loại {classify(TREND[TREND.length - 1]).letter}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-green-soft px-2.5 py-1 text-[12.5px] font-medium text-green">
-                      <TrendingUp size={14} /> +2.2 điểm
-                    </span>
-                  </div>
+                  {trendScores.length >= 2 && delta != null && (
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="rounded-[4px] px-2 py-1 text-[12px] font-bold text-white"
+                        style={{ background: TONE_COLOR[classify(trendScores[trendScores.length - 1]).tone] }}
+                      >
+                        Xếp loại {classify(trendScores[trendScores.length - 1]).letter}
+                      </span>
+                      <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[12.5px] font-medium ${delta >= 0 ? "bg-green-soft text-green" : "bg-danger-soft text-danger"}`}>
+                        <TrendingUp size={14} /> {delta >= 0 ? "+" : ""}{delta.toFixed(1)} điểm
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <ProgressChart data={TREND} />
+                {dashRes.error && !dash ? (
+                  <SectionError message={dashRes.error} onRetry={dashRes.reload} />
+                ) : !dash ? (
+                  <SectionLoading rows={3} />
+                ) : trendScores.length < 2 ? (
+                  <SectionEmpty title="Làm ít nhất 2 bài thi để xem tiến độ" />
+                ) : (
+                  <ProgressChart data={trendScores} />
+                )}
               </section>
 
               {/* Lịch sử thi (hợp với 1 trường) */}
@@ -711,25 +663,39 @@ export default function DashboardPage() {
                     <p className="text-[12px] text-ink-3">Chỉ hiển thị dữ liệu của {home.abbr}</p>
                   </div>
                 </div>
-                <div className="mt-3 divide-y divide-line max-h-[220px] overflow-y-auto">
-                  {history.map((h, i) => {
-                    const grade = classify(h.score);
-                    return (
-                      <div key={i} className="flex items-center gap-3 py-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-[13px] font-semibold text-ink">
-                            <span className="font-mono text-[11px] text-ink-3 bg-paper-2 border border-line rounded px-1 mr-1">{h.code}</span> {h.name}
-                          </p>
-                          <p className="text-[11px] text-ink-3 mt-0.5">{h.when}</p>
-                        </div>
-                        <span className="inline-flex items-center gap-1">
-                          <span className="tnum text-[13.5px] font-semibold" style={{ color: TONE_COLOR[grade.tone] }}>{h.score.toFixed(1)}</span>
-                          <span className="rounded-[4px] px-1 py-0.5 text-[9.5px] font-semibold text-white" style={{ background: TONE_COLOR[grade.tone] }}>{grade.letter}</span>
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
+                {dashRes.error && !dash ? (
+                  <SectionError message={dashRes.error} onRetry={dashRes.reload} />
+                ) : !dash ? (
+                  <SectionLoading rows={3} />
+                ) : dash.recentAttempts.length === 0 ? (
+                  <SectionEmpty title="Bạn chưa làm bài thi nào" />
+                ) : (
+                  <div className="mt-3 divide-y divide-line max-h-[220px] overflow-y-auto">
+                    {dash.recentAttempts.map((h) => {
+                      const grade = classify(h.score);
+                      const href = resultHref(h);
+                      const body = (
+                        <>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-[13px] font-semibold text-ink">
+                              <span className="font-mono text-[11px] text-ink-3 bg-paper-2 border border-line rounded px-1 mr-1">{h.subjectCode ?? "—"}</span> {h.subjectName ?? ""}
+                            </p>
+                            <p className="truncate text-[11px] text-ink-3 mt-0.5">{h.examTitle ? `${h.examTitle} · ` : ""}{formatRelativeTime(h.submittedAt)}</p>
+                          </div>
+                          <span className="inline-flex items-center gap-1">
+                            <span className="tnum text-[13.5px] font-semibold" style={{ color: TONE_COLOR[grade.tone] }}>{h.score.toFixed(1)}</span>
+                            <span className="rounded-[4px] px-1 py-0.5 text-[9.5px] font-semibold text-white" style={{ background: TONE_COLOR[grade.tone] }}>{grade.letter}</span>
+                          </span>
+                        </>
+                      );
+                      return href ? (
+                        <Link key={h.id} href={href} className="flex items-center gap-3 py-2.5 hover:bg-paper-2">{body}</Link>
+                      ) : (
+                        <div key={h.id} className="flex items-center gap-3 py-2.5">{body}</div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
             </div>
 
@@ -744,34 +710,11 @@ export default function DashboardPage() {
                   Xem tất cả
                 </button>
               </div>
-              <div className="divide-y divide-line">
-                {suggested.map((s) => {
-                  const grade = s.lastScore != null ? classify(s.lastScore) : null;
-                  return (
-                    <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-paper-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-[5px] border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-2">{s.code}</span>
-                          <h3 className="truncate text-[14.5px] font-semibold text-ink">{s.name}</h3>
-                        </div>
-                        <p className="mt-0.5 text-[12.5px] text-ink-3">{s.examCount} đề · {s.durationMin} phút · {s.difficulty}</p>
-                      </div>
-                      {grade && (
-                        <span className="hidden items-center gap-1.5 sm:inline-flex">
-                          <span className="text-[12px] text-ink-3">Gần nhất</span>
-                          <span className="tnum text-[14px] font-semibold" style={{ color: TONE_COLOR[grade.tone] }}>{s.lastScore?.toFixed(1)}</span>
-                        </span>
-                      )}
-                      <Link
-                        href={`/exam/${home.id}/${s.id}`}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-orange px-3.5 text-[13px] font-medium text-white shadow-sm hover:shadow transition-colors hover:bg-orange-dark"
-                      >
-                        <Play size={14} fill="currentColor" /> Vào thi
-                      </Link>
-                    </div>
-                  );
-                })}
-              </div>
+              {subjectsGate(() =>
+                quickAccess.length === 0
+                  ? <SectionEmpty title="Chưa có đề thi nào" />
+                  : <div className="divide-y divide-line">{quickAccess.map(renderExamRow)}</div>
+              )}
             </section>
           </div>
         )}
@@ -797,43 +740,12 @@ export default function DashboardPage() {
                         </span>
                         {selectedSubjectForDocs.name}
                       </h2>
-                      <p className="text-[12.5px] text-ink-3">Chuyên ngành: {selectedSubjectForDocs.faculty}</p>
+                      {selectedSubjectForDocs.faculty && <p className="text-[12.5px] text-ink-3">Chuyên ngành: {selectedSubjectForDocs.faculty}</p>}
                     </div>
                   </div>
                 </div>
 
-                {/* Chapter list */}
-                <div className="space-y-4">
-                  <h3 className="text-[16px] font-bold text-ink">Giáo trình & Slide bài giảng phân theo chương</h3>
-                  
-                  <div className="grid gap-4">
-                    {(CHAPTERS_DATA[selectedSubjectForDocs.code.toLowerCase()] || CHAPTERS_DATA.default).map((ch, idx) => (
-                      <div key={idx} className="rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)] hover:border-orange transition-colors flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div className="flex items-start gap-3.5">
-                          <div className="rounded-[6px] bg-orange-soft p-3 text-orange shrink-0">
-                            <Layers size={22} />
-                          </div>
-                          <div>
-                            <h4 className="text-[15px] font-bold text-ink">{ch.title}</h4>
-                            <p className="mt-1 text-[12.5px] text-ink-3">
-                              <span className="block">Slide bài giảng {selectedSubjectForDocs.code} · Chương {idx + 1}</span>
-                              <span className="mt-0.5 block font-semibold text-orange">PPTX (PowerPoint)</span>
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center sm:self-start md:self-auto">
-                          <button
-                            onClick={() => setPreviewingSlide({ chapterTitle: ch.title, slides: ch.slides, slideIndex: 0 })}
-                            className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-orange px-4 text-[13px] font-semibold text-white hover:bg-orange-dark transition-colors"
-                          >
-                            <Eye size={14} /> Xem trực tiếp
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <SubjectMaterialsPanel key={selectedSubjectForDocs.id} subject={selectedSubjectForDocs} />
               </div>
             ) : (
               // Original list view
@@ -848,10 +760,10 @@ export default function DashboardPage() {
                     <div className="rounded-[8px] border border-line bg-paper px-4 py-2 text-[13px] shadow-[var(--shadow-1)]">
                       <span className="tnum font-semibold text-ink">{subjects.length}</span> môn học
                     </div>
-                    {schoolId === "fptu" && (
+                    {termGroups.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => setExpandedTerms(expandedTerms.size > 0 ? new Set() : new Set(Array.from({ length: 9 }, (_, index) => index + 1)))}
+                        onClick={() => setExpandedTerms(expandedTerms.size > 0 ? new Set() : new Set(allTerms))}
                         className="inline-flex h-9 items-center rounded-[8px] border border-line bg-paper px-3 text-[12.5px] font-semibold text-ink-2 transition-colors hover:border-orange-border hover:bg-orange-soft hover:text-orange-dark"
                       >
                         {expandedTerms.size > 0 ? "Thu gọn các kỳ" : "Mở tất cả kỳ"}
@@ -874,7 +786,7 @@ export default function DashboardPage() {
                       />
                     </div>
 
-                    {schoolId === "fptu" && (
+                    {allTerms.length > 0 && (
                       <select
                         value={selectedTerm ?? ""}
                         onChange={(e) => {
@@ -886,23 +798,25 @@ export default function DashboardPage() {
                         className="h-10 rounded-[7px] border border-line bg-paper px-3 text-[13px] font-medium text-ink-2 outline-none focus:border-orange md:w-[145px]"
                       >
                         <option value="">Tất cả kỳ học</option>
-                        {Array.from({ length: 9 }, (_, index) => index + 1).map((term) => (
+                        {allTerms.map((term) => (
                           <option key={term} value={term}>Kỳ {term}</option>
                         ))}
                       </select>
                     )}
 
-                    <select
-                      value={selectedFaculty ?? ""}
-                      onChange={(e) => setSelectedFaculty(e.target.value || null)}
-                      aria-label="Lọc theo nhóm môn"
-                      className="h-10 rounded-[7px] border border-line bg-paper px-3 text-[13px] font-medium text-ink-2 outline-none focus:border-orange md:w-[210px]"
-                    >
-                      <option value="">Tất cả nhóm môn</option>
-                      {faculties.map((faculty) => (
-                        <option key={faculty} value={faculty}>{faculty}</option>
-                      ))}
-                    </select>
+                    {faculties.length > 0 && (
+                      <select
+                        value={selectedFaculty ?? ""}
+                        onChange={(e) => setSelectedFaculty(e.target.value || null)}
+                        aria-label="Lọc theo nhóm môn"
+                        className="h-10 rounded-[7px] border border-line bg-paper px-3 text-[13px] font-medium text-ink-2 outline-none focus:border-orange md:w-[210px]"
+                      >
+                        <option value="">Tất cả nhóm môn</option>
+                        {faculties.map((faculty) => (
+                          <option key={faculty} value={faculty}>{faculty}</option>
+                        ))}
+                      </select>
+                    )}
 
                     {(searchQuery || selectedTerm || selectedFaculty) && (
                       <button
@@ -921,59 +835,69 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Subjects List */}
-                {filteredSubjects.length === 0 ? (
+                {subjectsRes.error && !subjectsRes.data ? (
+                  <div className="rounded-[10px] border border-line bg-paper"><SectionError message={subjectsRes.error} onRetry={subjectsRes.reload} /></div>
+                ) : subjectsRes.loading ? (
+                  <div className="rounded-[10px] border border-line bg-paper"><SectionLoading rows={4} /></div>
+                ) : subjects.length === 0 ? (
+                  <div className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]">
+                    <SectionEmpty title="Trường của bạn chưa có môn học nào" />
+                  </div>
+                ) : filteredSubjects.length === 0 ? (
                   <div className="rounded-[10px] border border-line bg-paper p-10 text-center shadow-[var(--shadow-1)]">
                     <p className="text-[14.5px] font-medium text-ink">Không tìm thấy môn học nào phù hợp</p>
                     <p className="mt-1 text-[13px] text-ink-3">Thử thay đổi từ khóa tìm kiếm hoặc chọn chuyên ngành khác.</p>
                   </div>
                 ) : (
-                  schoolId === "fptu" ? (
-                    <div className="space-y-8">
-                      {fptTermGroups.map((group) => (
-                        <section key={group.term} aria-labelledby={`dashboard-term-${group.term}`}>
-                          <button
-                            type="button"
-                            onClick={() => setExpandedTerms((current) => {
-                              const next = new Set(current);
-                              if (next.has(group.term)) next.delete(group.term);
-                              else next.add(group.term);
-                              return next;
-                            })}
-                            aria-expanded={expandedTerms.has(group.term)}
-                            aria-controls={`dashboard-term-subjects-${group.term}`}
-                            className="mb-3 flex w-full items-center gap-3 border-b-2 border-orange pb-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
-                          >
-                            <span className="tnum inline-flex h-10 w-10 items-center justify-center rounded-[8px] bg-orange text-[18px] font-bold text-white shadow-sm">
-                              {group.term}
+                  <div className="space-y-8">
+                    {visibleTermGroups.map((group) => (
+                      <section key={group.term} aria-labelledby={`dashboard-term-${group.term}`}>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedTerms((current) => {
+                            const next = new Set(current);
+                            if (next.has(group.term)) next.delete(group.term);
+                            else next.add(group.term);
+                            return next;
+                          })}
+                          aria-expanded={expandedTerms.has(group.term)}
+                          aria-controls={`dashboard-term-subjects-${group.term}`}
+                          className="mb-3 flex w-full items-center gap-3 border-b-2 border-orange pb-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2"
+                        >
+                          <span className="tnum inline-flex h-10 w-10 items-center justify-center rounded-[8px] bg-orange text-[18px] font-bold text-white shadow-sm">
+                            {group.term}
+                          </span>
+                          <span>
+                            <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-orange-dark">Học kỳ</span>
+                            <span id={`dashboard-term-${group.term}`} className="block font-display text-[22px] font-semibold leading-tight text-ink">
+                              Kỳ {group.term}
                             </span>
-                            <span>
-                              <span className="block text-[10px] font-bold uppercase tracking-[0.12em] text-orange-dark">Học kỳ</span>
-                              <span id={`dashboard-term-${group.term}`} className="block font-display text-[22px] font-semibold leading-tight text-ink">
-                                Kỳ {group.term}
-                              </span>
-                            </span>
-                            <span className="tnum ml-auto rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
-                              {group.subjects.length} môn học
-                            </span>
-                            <ChevronDown
-                              size={18}
-                              aria-hidden="true"
-                              className={`text-ink-3 transition-transform ${expandedTerms.has(group.term) ? "rotate-180" : ""}`}
-                            />
-                          </button>
-                          {expandedTerms.has(group.term) && (
-                            <div id={`dashboard-term-subjects-${group.term}`} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                              {group.subjects.map(renderSubjectCard)}
-                            </div>
-                          )}
-                        </section>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                      {filteredSubjects.map(renderSubjectCard)}
-                    </div>
-                  )
+                          </span>
+                          <span className="tnum ml-auto rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
+                            {group.subjects.length} môn học
+                          </span>
+                          <ChevronDown
+                            size={18}
+                            aria-hidden="true"
+                            className={`text-ink-3 transition-transform ${expandedTerms.has(group.term) ? "rotate-180" : ""}`}
+                          />
+                        </button>
+                        {expandedTerms.has(group.term) && (
+                          <div id={`dashboard-term-subjects-${group.term}`} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                            {group.subjects.map(renderSubjectCard)}
+                          </div>
+                        )}
+                      </section>
+                    ))}
+                    {!selectedTerm && untermed.length > 0 && (
+                      <section aria-label="Môn học chưa xếp kỳ">
+                        {termGroups.length > 0 && (
+                          <h2 className="mb-3 border-b-2 border-line pb-3 font-display text-[18px] font-semibold text-ink">Môn học khác</h2>
+                        )}
+                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{untermed.map(renderSubjectCard)}</div>
+                      </section>
+                    )}
+                  </div>
                 )}
               </>
             )}
@@ -989,138 +913,57 @@ export default function DashboardPage() {
                 <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Tài liệu ôn tập</h1>
                 <p className="mt-1 text-[15px] text-ink-2">Giáo trình và slide đang có trong ExamCure, sắp theo từng học phần.</p>
               </div>
-              <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
-                {docsList.length} tài liệu
-              </span>
+              {materialsRes.data && (
+                <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
+                  {materialsRes.data.length} tài liệu
+                </span>
+              )}
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              {docsList.map((doc, i) => {
-                const typeTone = doc.type === "PDF" ? "var(--color-danger)" : doc.type === "PPTX" ? "var(--color-warning)" : "var(--color-blue)";
-                return (
-                <div key={i} className="flex items-start gap-4 rounded-[10px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] hover:border-orange transition-colors">
-                  <div className="rounded-[6px] p-3" style={{ background: `color-mix(in srgb, ${typeTone} 12%, white)`, color: typeTone }}>
-                    <FileText size={24} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="rounded bg-paper-2 border border-line px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-3">{doc.code}</span>
-                    <h3 className="mt-1.5 truncate text-[14.5px] font-semibold text-ink" title={doc.title}>{doc.title}</h3>
-                    <p className="mt-1 text-[12px] text-ink-3">
-                      <span className="font-semibold" style={{ color: typeTone }}>{doc.type}</span> · {doc.size} · {doc.reads}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const subject = subjects.find((item) => item.code === doc.code);
-                        if (subject) {
-                          setSelectedSubjectForDocs(subject);
-                          navigateToTab("mon-hoc");
-                        }
-                      }}
-                      className="mt-3.5 inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-orange-border bg-orange-soft px-3 text-[12px] font-semibold text-orange-dark transition-colors hover:bg-orange hover:text-white"
-                    >
-                      <Eye size={13} aria-hidden="true" /> Mở tài liệu
-                    </button>
-                  </div>
-                </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "flashcards" && <div className="dashboard-view"><FlashcardWorkspace /></div>}
-
-        {/* Luyện câu hỏi nhanh Tab Content */}
-        {activeTab === "trac-nghiem" && (
-          <div className="dashboard-view space-y-6">
-            <div className="dashboard-title">
-              <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">{home.abbr} · Ôn tập</span>
-              <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Luyện câu hỏi trắc nghiệm nhanh</h1>
-              <p className="mt-1 text-[15px] text-ink-2">Trả lời các câu hỏi trắc nghiệm đơn lẻ có chấm điểm và giải thích tức thì.</p>
-            </div>
-
-            <div className="w-full rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)] space-y-4">
-              <div className="flex items-center justify-between border-b border-line pb-3">
-                <span className="text-[11px] font-bold text-ink-3 bg-paper-2 border border-line px-2 py-0.5 rounded">CÂU HỎI THƯỜNG GẶP</span>
-                <span className="text-[12.5px] text-green font-semibold">Chủ đề: Cấu trúc cây (BST)</span>
-              </div>
-
-              <p className="text-[15.5px] font-semibold text-ink leading-relaxed">
-                {quizQuestion.q}
-              </p>
-
-              <div className="space-y-2.5 pt-2">
-                {quizQuestion.options.map((opt, idx) => {
-                  let optStyle = "border-line bg-paper text-ink hover:border-orange hover:bg-paper-2";
-                  if (quizChecked) {
-                    if (idx === quizQuestion.correct) {
-                      optStyle = "border-green bg-green-soft text-green font-medium";
-                    } else if (idx === selectedAnswer) {
-                      optStyle = "border-danger bg-danger-soft text-danger";
-                    } else {
-                      optStyle = "border-line bg-paper text-ink opacity-60";
-                    }
-                  } else if (selectedAnswer === idx) {
-                    optStyle = "border-orange bg-orange-soft text-orange-dark font-medium";
-                  }
-
+            {materialsRes.error && !materialsRes.data ? (
+              <div className="rounded-[10px] border border-line bg-paper"><SectionError message={materialsRes.error} onRetry={materialsRes.reload} /></div>
+            ) : materialsRes.loading ? (
+              <div className="rounded-[10px] border border-line bg-paper"><SectionLoading rows={4} /></div>
+            ) : (materialsRes.data ?? []).length === 0 ? (
+              <div className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]"><SectionEmpty title="Chưa có tài liệu nào" /></div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {(materialsRes.data ?? []).map((doc) => {
+                  const type = fileTypeLabel(doc.version.original_filename);
+                  const typeTone = type === "PDF" ? "var(--color-danger)" : type === "PPTX" ? "var(--color-warning)" : "var(--color-blue)";
                   return (
-                    <button
-                      key={idx}
-                      disabled={quizChecked}
-                      onClick={() => setSelectedAnswer(idx)}
-                      className={`w-full flex items-start gap-3 rounded-[8px] border p-3.5 text-left text-[14px] transition-all ${optStyle}`}
-                    >
-                      <span className={`grid shrink-0 place-items-center w-5 h-5 rounded-full border text-[11px] font-semibold uppercase ${
-                        selectedAnswer === idx ? "bg-orange border-orange text-white" : "border-line text-ink-3"
-                      }`}>
-                        {String.fromCharCode(65 + idx)}
-                      </span>
-                      <span className="leading-normal">{opt}</span>
-                    </button>
+                    <div key={doc.id} className="flex items-start gap-4 rounded-[10px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] hover:border-orange transition-colors">
+                      <div className="rounded-[6px] p-3" style={{ background: `color-mix(in srgb, ${typeTone} 12%, white)`, color: typeTone }}>
+                        <FileText size={24} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="rounded bg-paper-2 border border-line px-1.5 py-0.5 font-mono text-[10px] font-medium text-ink-3">{doc.subjectCode}</span>
+                        <h3 className="mt-1.5 truncate text-[14.5px] font-semibold text-ink" title={doc.title}>{doc.title}</h3>
+                        <p className="mt-1 text-[12px] text-ink-3">
+                          <span className="font-semibold" style={{ color: typeTone }}>{type}</span> · {formatFileSize(doc.version.size_bytes)}
+                        </p>
+                        <Link
+                          href={materialHref(schoolId, doc.subjectCode, doc.version.id)}
+                          className="mt-3.5 inline-flex h-8 items-center gap-1.5 rounded-[5px] border border-orange-border bg-orange-soft px-3 text-[12px] font-semibold text-orange-dark transition-colors hover:bg-orange hover:text-white"
+                        >
+                          <Eye size={13} aria-hidden="true" /> Mở tài liệu
+                        </Link>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
-
-              {quizChecked && (
-                <div className={`rounded-[8px] p-4 text-[13.5px] leading-relaxed ${
-                  selectedAnswer === quizQuestion.correct ? "bg-green-soft text-green-dark" : "bg-orange-soft text-orange-dark"
-                }`}>
-                  <h4 className="font-bold flex items-center gap-1.5 text-[14px] mb-1">
-                    {selectedAnswer === quizQuestion.correct ? (
-                      <>✔ Trả lời chính xác!</>
-                    ) : (
-                      <>✖ Trả lời sai (Đáp án đúng là {String.fromCharCode(65 + quizQuestion.correct)})</>
-                    )}
-                  </h4>
-                  <p>{quizQuestion.explanation}</p>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3 pt-3 border-t border-line">
-                {!quizChecked ? (
-                  <button
-                    disabled={selectedAnswer === null}
-                    onClick={() => setQuizChecked(true)}
-                    className="inline-flex h-10 items-center justify-center rounded-[6px] bg-orange px-5 text-[13px] font-semibold text-white hover:bg-orange-dark transition-colors disabled:opacity-50"
-                  >
-                    Kiểm tra đáp án
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => {
-                      setSelectedAnswer(null);
-                      setQuizChecked(false);
-                    }}
-                    className="inline-flex h-10 items-center justify-center rounded-[6px] border border-line bg-paper px-4 text-[13px] font-semibold text-ink-2 hover:bg-paper-2 transition-colors"
-                  >
-                    Luyện câu hỏi tiếp theo
-                  </button>
-                )}
-              </div>
-            </div>
+            )}
           </div>
+        )}
+
+        {activeTab === "flashcards" && (
+          <ComingSoon abbr={home.abbr} title="Thẻ ghi nhớ" description="Ôn từ khóa và khái niệm bằng thẻ lật theo từng học phần." />
+        )}
+
+        {/* Luyện câu hỏi nhanh Tab Content */}
+        {activeTab === "trac-nghiem" && (
+          <ComingSoon abbr={home.abbr} title="Luyện câu hỏi trắc nghiệm nhanh" description="Trả lời các câu hỏi trắc nghiệm đơn lẻ có chấm điểm và giải thích tức thì." />
         )}
 
         {/* Sổ tay sửa sai Tab Content */}
@@ -1132,41 +975,53 @@ export default function DashboardPage() {
                 <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Sổ tay câu sai</h1>
                 <p className="mt-1 text-[15px] text-ink-2">Xem lại những câu đã làm sai và lý do để tránh lặp lại lỗi cũ.</p>
               </div>
-              <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
-                {incorrectQuestions.length} câu cần xem lại
-              </span>
+              {wrongRes.data && (
+                <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
+                  {wrongRes.data.length} câu cần xem lại
+                </span>
+              )}
             </div>
 
-            <div className="space-y-4">
-              {incorrectQuestions.map((q, idx) => (
-                <div key={idx} className="rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)] space-y-3.5">
-                  <div className="flex items-center justify-between border-b border-line pb-2.5">
-                    <span className="font-mono text-[11px] font-bold text-orange bg-orange-soft border border-orange-border px-1.5 py-0.5 rounded">{q.code}</span>
-                    <span className="text-[12px] text-ink-3">{q.subject}</span>
-                  </div>
-
-                  <p className="text-[15px] font-semibold text-ink leading-relaxed">
-                    {q.q}
-                  </p>
-
-                  <div className="grid gap-2 text-[13px] md:grid-cols-2">
-                    <div className="rounded-[6px] bg-danger-soft p-3 text-danger border border-danger-soft">
-                      <span className="block text-[10.5px] font-bold uppercase tracking-wider opacity-85">Câu bạn chọn:</span>
-                      <p className="mt-0.5 font-medium">{q.yourAnswer}</p>
+            {wrongRes.error && !wrongRes.data ? (
+              <div className="rounded-[10px] border border-line bg-paper"><SectionError message={wrongRes.error} onRetry={wrongRes.reload} /></div>
+            ) : wrongRes.loading ? (
+              <div className="rounded-[10px] border border-line bg-paper"><SectionLoading rows={3} /></div>
+            ) : (wrongRes.data ?? []).length === 0 ? (
+              <div className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]"><SectionEmpty title="Chưa có câu sai nào" /></div>
+            ) : (
+              <div className="space-y-4">
+                {(wrongRes.data ?? []).map((q) => (
+                  <div key={q.questionId} className="rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)] space-y-3.5">
+                    <div className="flex items-center justify-between border-b border-line pb-2.5">
+                      <span className="font-mono text-[11px] font-bold text-orange bg-orange-soft border border-orange-border px-1.5 py-0.5 rounded">{q.subjectCode ?? "—"}</span>
+                      <span className="text-[12px] text-ink-3">{q.subjectName}</span>
                     </div>
-                    <div className="rounded-[6px] bg-green-soft p-3 text-green border border-green-soft">
-                      <span className="block text-[10.5px] font-bold uppercase tracking-wider opacity-85">Đáp án đúng:</span>
-                      <p className="mt-0.5 font-medium">{q.correctAnswer}</p>
-                    </div>
-                  </div>
 
-                  <div className="rounded-[6px] bg-paper-2 p-3.5 border border-line text-[13px] text-ink-2 leading-relaxed">
-                    <strong className="text-ink font-semibold block mb-0.5">Vì sao đáp án này đúng:</strong>
-                    {q.reason}
+                    <p className="text-[15px] font-semibold text-ink leading-relaxed">
+                      {q.prompt}
+                    </p>
+
+                    <div className="grid gap-2 text-[13px] md:grid-cols-2">
+                      <div className="rounded-[6px] bg-danger-soft p-3 text-danger border border-danger-soft">
+                        <span className="block text-[10.5px] font-bold uppercase tracking-wider opacity-85">Câu bạn chọn:</span>
+                        <p className="mt-0.5 font-medium">{q.yourAnswer ?? "Bỏ trống"}</p>
+                      </div>
+                      <div className="rounded-[6px] bg-green-soft p-3 text-green border border-green-soft">
+                        <span className="block text-[10.5px] font-bold uppercase tracking-wider opacity-85">Đáp án đúng:</span>
+                        <p className="mt-0.5 font-medium">{q.correctAnswer ?? "—"}</p>
+                      </div>
+                    </div>
+
+                    {q.explanation && (
+                      <div className="rounded-[6px] bg-paper-2 p-3.5 border border-line text-[13px] text-ink-2 leading-relaxed">
+                        <strong className="text-ink font-semibold block mb-0.5">Vì sao đáp án này đúng:</strong>
+                        {q.explanation}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1183,43 +1038,14 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
                 <div>
                   <h2 className="text-[15px] font-semibold text-ink">Toàn bộ học phần</h2>
-                  <p className="text-[12.5px] text-ink-3">{subjects.length} học phần có đề luyện thi</p>
+                  {subjectsRes.data && <p className="text-[12.5px] text-ink-3">{examSubjects.length} học phần có đề luyện thi</p>}
                 </div>
               </div>
-              <div className="divide-y divide-line">
-                {subjects.map((s) => {
-                  const grade = s.lastScore != null ? classify(s.lastScore) : null;
-                  return (
-                    <div key={s.id} className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-paper-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-[5px] border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-2">{s.code}</span>
-                          <h3 className="truncate text-[14.5px] font-semibold text-ink">{s.name}</h3>
-                        </div>
-                        <p className="mt-0.5 flex items-center gap-1.5 text-[12.5px] text-ink-3">
-                          {s.examCount} đề · {s.durationMin} phút
-                          <span className="inline-flex items-center gap-1">
-                            <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: DIFFICULTY_TONE[s.difficulty] }} aria-hidden="true" />
-                            {s.difficulty}
-                          </span>
-                        </p>
-                      </div>
-                      {grade && (
-                        <span className="hidden items-center gap-1.5 sm:inline-flex">
-                          <span className="text-[12px] text-ink-3">Gần nhất</span>
-                          <span className="tnum text-[14px] font-semibold" style={{ color: TONE_COLOR[grade.tone] }}>{s.lastScore?.toFixed(1)}</span>
-                        </span>
-                      )}
-                      <Link
-                        href={`/exam/${home.id}/${s.id}`}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-orange px-3.5 text-[13px] font-medium text-white shadow-sm hover:shadow transition-colors hover:bg-orange-dark"
-                      >
-                        <Play size={14} fill="currentColor" /> Vào thi
-                      </Link>
-                    </div>
-                  );
-                })}
-              </div>
+              {subjectsGate(() =>
+                examSubjects.length === 0
+                  ? <SectionEmpty title="Chưa có đề thi nào — đề sẽ xuất hiện khi giảng viên/admin xuất bản" />
+                  : <div className="divide-y divide-line">{examSubjects.map(renderExamRow)}</div>
+              )}
             </section>
           </div>
         )}
@@ -1233,114 +1059,68 @@ export default function DashboardPage() {
                 <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">Lịch sử thi gần đây</h1>
                 <p className="mt-1 text-[15px] text-ink-2">Kết quả thi thử và lưu trữ bài làm của bạn tại {home.name}.</p>
               </div>
-              <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
-                {history.length} lượt thi
-              </span>
+              {historyRes.data && (
+                <span className="tnum rounded-full border border-line bg-paper px-3 py-1 text-[12px] font-semibold text-ink-2">
+                  {historyItems.length} lượt thi{historyNext ? "+" : ""}
+                </span>
+              )}
             </div>
 
             <section className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]">
-              <div className="divide-y divide-line">
-                {history.map((h, i) => {
-                  const grade = classify(h.score);
-                  return (
-                    <div key={i} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-paper-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-[5px] border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-2">{h.code}</span>
-                          <h3 className="truncate text-[14.5px] font-semibold text-ink">{h.name}</h3>
-                        </div>
-                        <p className="mt-0.5 text-[12.5px] text-ink-3">{home.abbr} · {h.when}</p>
-                      </div>
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="tnum text-[15px] font-semibold" style={{ color: TONE_COLOR[grade.tone] }}>{h.score.toFixed(1)}</span>
-                        <span className="rounded-[4px] px-1.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: TONE_COLOR[grade.tone] }}>{grade.letter}</span>
-                      </span>
+              {historyRes.error && !historyRes.data ? (
+                <SectionError message={historyRes.error} onRetry={historyRes.reload} />
+              ) : historyRes.loading ? (
+                <SectionLoading rows={4} />
+              ) : historyItems.length === 0 ? (
+                <SectionEmpty title="Bạn chưa làm bài thi nào" />
+              ) : (
+                <>
+                  <div className="divide-y divide-line">
+                    {historyItems.map((h) => {
+                      const grade = classify(h.score);
+                      const href = resultHref(h);
+                      const body = (
+                        <>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="rounded-[5px] border border-line bg-paper-2 px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-2">{h.subjectCode ?? "—"}</span>
+                              <h3 className="truncate text-[14.5px] font-semibold text-ink">{h.subjectName ?? ""}</h3>
+                            </div>
+                            <p className="mt-0.5 text-[12.5px] text-ink-3">{h.examTitle ? `${h.examTitle} · ` : ""}{formatRelativeTime(h.submittedAt)}</p>
+                          </div>
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="tnum text-[15px] font-semibold" style={{ color: TONE_COLOR[grade.tone] }}>{h.score.toFixed(1)}</span>
+                            <span className="rounded-[4px] px-1.5 py-0.5 text-[11px] font-semibold text-white" style={{ background: TONE_COLOR[grade.tone] }}>{grade.letter}</span>
+                          </span>
+                        </>
+                      );
+                      return href ? (
+                        <Link key={h.id} href={href} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-paper-2">{body}</Link>
+                      ) : (
+                        <div key={h.id} className="flex items-center gap-4 px-5 py-4 transition-colors hover:bg-paper-2">{body}</div>
+                      );
+                    })}
+                  </div>
+                  {(historyNext || moreError) && (
+                    <div className="flex flex-col items-center gap-2 border-t border-line p-4">
+                      {moreError && <p role="alert" className="text-[13px] text-danger">{moreError}</p>}
+                      <button
+                        type="button"
+                        onClick={() => void loadMoreHistory()}
+                        disabled={moreLoading || !historyNext}
+                        className="inline-flex h-9 items-center rounded-[6px] border border-line bg-paper px-4 text-[13px] font-semibold text-ink-2 transition-colors hover:bg-paper-2 disabled:opacity-50"
+                      >
+                        {moreLoading ? "Đang tải…" : moreError ? "Thử lại" : "Xem thêm"}
+                      </button>
                     </div>
-                  );
-                })}
-              </div>
+                  )}
+                </>
+              )}
             </section>
           </div>
         )}
 
       </main>
-
-      {/* Slide Preview Modal */}
-      {previewingSlide && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="slide-preview-title"
-            aria-describedby="slide-preview-description"
-            className="relative flex min-h-[480px] w-full max-w-4xl flex-col overflow-hidden rounded-[16px] border border-line bg-paper shadow-2xl"
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-line px-6 py-4 bg-paper-2">
-              <div>
-                <h3 id="slide-preview-title" className="text-[16.5px] font-bold text-ink">{previewingSlide.chapterTitle}</h3>
-                <p id="slide-preview-description" className="text-[12px] text-ink-3">Bản xem trước nội dung slide</p>
-              </div>
-              <button
-                type="button"
-                autoFocus
-                onClick={() => setPreviewingSlide(null)}
-                aria-label="Đóng bản xem trước"
-                className="rounded-full p-1.5 hover:bg-line text-ink-3 hover:text-ink transition-colors"
-              >
-                <X size={18} aria-hidden="true" />
-              </button>
-            </div>
-
-            {/* Slide Content Box */}
-            <div className="flex-1 bg-ink-2 p-8 md:p-12 flex items-center justify-center">
-              <div className="w-full max-w-2xl aspect-[4/3] bg-paper border border-line rounded-lg shadow-lg p-8 md:p-10 flex flex-col justify-between select-none relative">
-                {/* School watermark in preview */}
-                <div className="absolute top-4 right-4 flex items-center gap-1.5 opacity-30">
-                  <SchoolMark theme={home.theme} abbr={home.abbr} size={16} />
-                  <span className="font-mono text-[9px] font-bold text-ink">{home.abbr}</span>
-                </div>
-
-                <div className="flex-1 flex flex-col justify-center">
-                  <p className="text-[16px] md:text-[18px] font-semibold text-ink leading-relaxed">
-                    {previewingSlide.slides[previewingSlide.slideIndex]}
-                  </p>
-                </div>
-
-                {/* Slide Footer */}
-                <div className="mt-8 border-t border-line pt-4 flex justify-between items-center text-[12px] text-ink-3">
-                  <span>Học phần: <strong className="text-ink-2">{selectedSubjectForDocs?.code} - {selectedSubjectForDocs?.name}</strong></span>
-                  <span className="tnum font-medium">Trang {previewingSlide.slideIndex + 1} / {previewingSlide.slides.length}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer Controls */}
-            <div className="flex items-center justify-end border-t border-line bg-paper-2 px-6 py-4">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  disabled={previewingSlide.slideIndex === 0}
-                  onClick={() => setPreviewingSlide({ ...previewingSlide, slideIndex: previewingSlide.slideIndex - 1 })}
-                  aria-label="Xem slide trước"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-line bg-paper text-ink-2 hover:bg-paper-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronLeft size={16} aria-hidden="true" />
-                </button>
-                <button
-                  type="button"
-                  disabled={previewingSlide.slideIndex === previewingSlide.slides.length - 1}
-                  onClick={() => setPreviewingSlide({ ...previewingSlide, slideIndex: previewingSlide.slideIndex + 1 })}
-                  aria-label="Xem slide tiếp theo"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-[6px] border border-line bg-paper text-ink-2 hover:bg-paper-2 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  <ChevronRight size={16} aria-hidden="true" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {isAccountModalOpen && (
         <div className="fixed inset-0 z-[70] grid place-items-center p-4" role="presentation">
@@ -1358,7 +1138,7 @@ export default function DashboardPage() {
               <Avatar size={58} name={studentName} avatarUrl={avatarUrl} />
               <div className="min-w-0">
                 <p className="truncate text-[17px] font-semibold text-ink">{studentName}</p>
-                <p className="truncate text-[13px] text-ink-3">{user?.email || "Chưa có email"}</p>
+                <p className="truncate text-[13px] text-ink-3">{user.email || "Chưa có email"}</p>
               </div>
             </div>
 
@@ -1392,7 +1172,7 @@ export default function DashboardPage() {
                       ["Trường", home.name],
                       ["Khối ngành", home.field],
                       ["Khu vực", home.city],
-                      ["Vai trò", capitalizeFirst(user?.role || "student")],
+                      ["Vai trò", capitalizeFirst(user.role || "student")],
                       ["Phần mềm thi mô phỏng", home.theme.systemName],
                     ].map(([label, value]) => (
                       <div key={label} className="flex items-center justify-between gap-4 py-3">
@@ -1406,15 +1186,15 @@ export default function DashboardPage() {
                     <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-ink-3">Tổng quan học tập</p>
                     <div className="grid grid-cols-3 gap-2.5">
                       <div className="rounded-[9px] border border-line bg-paper-2 p-3 text-center">
-                        <p className="tnum font-display text-[19px] font-semibold text-green">{AVG_SCORE.toFixed(1)}</p>
+                        <p className="tnum font-display text-[19px] font-semibold text-green">{dash?.stats.averageScore != null ? dash.stats.averageScore.toFixed(1) : "—"}</p>
                         <p className="mt-0.5 text-[11px] text-ink-3">Điểm TB</p>
                       </div>
                       <div className="rounded-[9px] border border-line bg-paper-2 p-3 text-center">
-                        <p className="tnum font-display text-[19px] font-semibold text-ink">{TOTAL_EXAMS_DONE}</p>
+                        <p className="tnum font-display text-[19px] font-semibold text-ink">{dash ? dash.stats.totalAttempts : "—"}</p>
                         <p className="mt-0.5 text-[11px] text-ink-3">Đề đã làm</p>
                       </div>
                       <div className="rounded-[9px] border border-line bg-paper-2 p-3 text-center">
-                        <p className="tnum font-display text-[19px] font-semibold text-blue">{SUBJECTS_IN_PROGRESS}</p>
+                        <p className="tnum font-display text-[19px] font-semibold text-blue">{dash ? dash.stats.subjectsInProgress : "—"}</p>
                         <p className="mt-0.5 text-[11px] text-ink-3">Môn đang luyện</p>
                       </div>
                     </div>
@@ -1465,196 +1245,68 @@ export default function DashboardPage() {
   );
 }
 
-function DashboardAccountControl({
-  name,
-  mssv,
-  avatarUrl,
-  menuOpen,
-  onToggle,
-  onAccount,
-  onSignOut,
-  trailing,
-}: {
-  name: string;
-  mssv: string;
-  avatarUrl?: string;
-  menuOpen: boolean;
-  onToggle: () => void;
-  onAccount: () => void;
-  onSignOut: () => void;
-  trailing?: React.ReactNode;
-}) {
+/** Tab chưa có dữ liệu thật — giữ tiêu đề, hiển thị trạng thái "Sắp ra mắt". */
+function ComingSoon({ abbr, title, description }: { abbr: string; title: string; description: string }) {
   return (
-    <div className="relative">
-      <button type="button" onClick={onToggle} aria-expanded={menuOpen} aria-haspopup="menu" className="flex w-full items-center gap-3 rounded-[8px] border border-line bg-paper-2 p-3 text-left transition-colors hover:border-line-strong hover:bg-paper-3">
-        <Avatar size={38} name={name} avatarUrl={avatarUrl} />
-        <div className="min-w-0 flex-1"><p className="truncate text-[13.5px] font-semibold leading-tight text-ink">{name}</p><p className="mt-0.5 truncate text-[11px] text-ink-3">{mssv}</p></div>
-        {trailing || <ChevronDown size={16} className={`shrink-0 text-ink-3 transition-transform ${menuOpen ? "rotate-180" : ""}`} />}
-      </button>
-      {menuOpen && (
-        <div role="menu" className="absolute bottom-[calc(100%+8px)] left-0 z-20 w-full overflow-hidden rounded-[9px] border border-line bg-paper p-1 shadow-[var(--shadow-pop)]">
-          <button type="button" role="menuitem" onClick={onAccount} className="flex w-full items-center gap-2 rounded-[6px] px-3 py-2.5 text-left text-[13px] font-medium text-ink-2 hover:bg-paper-2 hover:text-ink"><UserRound size={15} /> Thông tin tài khoản</button>
-          <button type="button" role="menuitem" onClick={onSignOut} className="flex w-full items-center gap-2 rounded-[6px] px-3 py-2.5 text-left text-[13px] font-medium text-danger hover:bg-danger-soft"><LogOut size={15} /> Đăng xuất</button>
+    <div className="dashboard-view space-y-6">
+      <div className="dashboard-title">
+        <span className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-ink-3">{abbr} · Ôn tập</span>
+        <h1 className="mt-1 font-display text-[26px] font-semibold text-ink">{title}</h1>
+        <p className="mt-1 text-[15px] text-ink-2">{description}</p>
+      </div>
+      <div className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]">
+        <SectionEmpty title="Sắp ra mắt" hint="Tính năng này đang được hoàn thiện." />
+      </div>
+    </div>
+  );
+}
+
+/** Giáo trình & slide của một môn: lấy từ API, mỗi tài liệu chỉ giữ phiên bản mới nhất. */
+function SubjectMaterialsPanel({ subject }: { subject: CatalogSubject }) {
+  const load = useCallback(
+    async (signal: AbortSignal) => dedupeMaterials(await listSubjectMaterials(subject.schoolCode, subject.code, signal)),
+    [subject.schoolCode, subject.code],
+  );
+  const res = useResource(load, true);
+  return (
+    <div className="space-y-4">
+      <h3 className="text-[16px] font-bold text-ink">Giáo trình & Slide bài giảng</h3>
+      {res.error && !res.data ? (
+        <div className="rounded-[10px] border border-line bg-paper"><SectionError message={res.error} onRetry={res.reload} /></div>
+      ) : res.loading ? (
+        <div className="rounded-[10px] border border-line bg-paper"><SectionLoading rows={3} /></div>
+      ) : (res.data ?? []).length === 0 ? (
+        <div className="rounded-[10px] border border-line bg-paper shadow-[var(--shadow-1)]"><SectionEmpty title="Môn này chưa có tài liệu" /></div>
+      ) : (
+        <div className="grid gap-4">
+          {(res.data ?? []).map((m) => (
+            <div key={m.id} className="rounded-[10px] border border-line bg-paper p-5 shadow-[var(--shadow-1)] hover:border-orange transition-colors flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="rounded-[6px] bg-orange-soft p-3 text-orange shrink-0">
+                  <Layers size={22} />
+                </div>
+                <div>
+                  <h4 className="text-[15px] font-bold text-ink">{m.title}</h4>
+                  {m.description && <p className="mt-1 text-[12.5px] text-ink-2">{m.description}</p>}
+                  <p className="mt-1 text-[12.5px] text-ink-3">
+                    <span className="block">{m.version.slide_count} slide · {formatFileSize(m.version.size_bytes)} · Cập nhật {formatDate(m.version.processed_at || m.createdAt)}</span>
+                    <span className="mt-0.5 block font-semibold text-orange">{fileTypeLabel(m.version.original_filename)}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center sm:self-start md:self-auto">
+                <Link
+                  href={materialHref(subject.schoolCode, subject.code, m.version.id)}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-[6px] bg-orange px-4 text-[13px] font-semibold text-white hover:bg-orange-dark transition-colors"
+                >
+                  <Eye size={14} /> Xem trực tiếp
+                </Link>
+              </div>
+            </div>
+          ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function Avatar({ size = 36, name = "Student", avatarUrl }: { size?: number; name?: string; avatarUrl?: string }) {
-  if (avatarUrl) {
-    return <img src={avatarUrl} alt="" width={size} height={size} className="shrink-0 rounded-full object-cover" referrerPolicy="no-referrer" />;
-  }
-  return (
-    <span
-      className="grid shrink-0 place-items-center rounded-full bg-ink font-semibold text-white uppercase"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
-      aria-hidden
-    >
-      {initials(name)}
-    </span>
-  );
-}
-
-function SettingToggle({
-  label,
-  description,
-  checked,
-  onChange,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onChange: () => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 rounded-[9px] border border-line bg-paper-2 px-3.5 py-3">
-      <div className="min-w-0">
-        <p className="text-[13.5px] font-semibold text-ink">{label}</p>
-        <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">{description}</p>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        aria-label={label}
-        onClick={onChange}
-        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange focus-visible:ring-offset-2 ${checked ? "bg-orange" : "bg-line-strong"}`}
-      >
-        <span className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[22px]" : "translate-x-[3px]"}`} />
-      </button>
-    </div>
-  );
-}
-
-function Stat({
-  icon,
-  value,
-  label,
-  sub,
-  tone,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-  sub?: string;
-  tone: "ink" | "green" | "blue" | "orange";
-}) {
-  const color =
-    tone === "green"
-      ? "var(--color-green)"
-      : tone === "blue"
-        ? "var(--color-blue)"
-        : tone === "orange"
-          ? "var(--color-orange)"
-          : "var(--color-ink)";
-  return (
-    <div className="dashboard-metric group relative overflow-hidden rounded-[12px] border border-line bg-paper p-4 shadow-[var(--shadow-1)] transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-1 hover:border-orange-border hover:shadow-[var(--shadow-2)]">
-      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: color, opacity: 0.5 }} aria-hidden="true" />
-      <div className="flex items-start justify-between gap-3">
-        <span className="inline-flex h-8 w-8 items-center justify-center rounded-[7px] bg-paper-2 transition-colors group-hover:bg-orange-soft" style={{ color }}>{icon}</span>
-        {sub && <span className="text-right text-[10.5px] font-medium text-ink-3">{sub}</span>}
-      </div>
-      <p className="tnum mt-3 font-display text-[28px] font-semibold leading-none" style={{ color }}>
-        {value}
-      </p>
-      <p className="mt-1.5 text-[13px] font-medium text-ink-2">{label}</p>
-    </div>
-  );
-}
-
-/** Grade bands, aligned to classify() thresholds in lib/grade.ts — the chart background doubles as a scoresheet. */
-const CHART_GRADE_BANDS = [
-  { from: 4, to: 5, tone: "var(--color-danger)", label: "D · Yếu" },
-  { from: 5, to: 7, tone: "#c98a06", label: "C · TB" },
-  { from: 7, to: 8, tone: "var(--color-blue)", label: "B · Khá" },
-  { from: 8, to: 10, tone: "var(--color-green)", label: "A · Giỏi" },
-];
-
-/** SVG line chart — trend line in brand accent, plotted over the student's own grade bands. */
-function ProgressChart({ data }: { data: number[] }) {
-  const W = 560;
-  const H = 188;
-  const pad = { l: 30, r: 54, t: 14, b: 24 };
-  const min = 4;
-  const max = 10;
-  const innerW = W - pad.l - pad.r;
-  const innerH = H - pad.t - pad.b;
-
-  const x = (i: number) => pad.l + (i / (data.length - 1)) * innerW;
-  const y = (v: number) => pad.t + (1 - (v - min) / (max - min)) * innerH;
-
-  const linePts = data.map((v, i) => `${x(i)},${y(v)}`).join(" ");
-  const areaPts = `${pad.l},${pad.t + innerH} ${linePts} ${pad.l + innerW},${pad.t + innerH}`;
-  const gridYs = [4, 5, 7, 8, 10];
-
-  return (
-    <div className="mt-3 overflow-hidden">
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" preserveAspectRatio="xMidYMid meet">
-        {CHART_GRADE_BANDS.map((band) => (
-          <rect
-            key={band.label}
-            x={pad.l}
-            y={y(band.to)}
-            width={innerW}
-            height={y(band.from) - y(band.to)}
-            fill={band.tone}
-            opacity={0.06}
-          />
-        ))}
-        {gridYs.map((g) => (
-          <g key={g}>
-            <line x1={pad.l} x2={W - pad.r} y1={y(g)} y2={y(g)} stroke="var(--color-line)" strokeWidth="1" />
-            <text x={4} y={y(g) + 4} fontSize="11" fill="var(--color-ink-3)" className="tnum">{g}</text>
-          </g>
-        ))}
-        {CHART_GRADE_BANDS.map((band) => (
-          <text
-            key={`label-${band.label}`}
-            x={W - pad.r + 8}
-            y={(y(band.from) + y(band.to)) / 2 + 3.5}
-            fontSize="10"
-            fontWeight="600"
-            fill={band.tone}
-            opacity={0.75}
-          >
-            {band.label}
-          </text>
-        ))}
-        <polygon points={areaPts} fill="var(--color-orange-soft)" opacity="0.6" />
-        <polyline points={linePts} fill="none" stroke="var(--color-orange)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {data.map((v, i) => (
-          <g key={i}>
-            <circle cx={x(i)} cy={y(v)} r={i === data.length - 1 ? 5 : 3.5} fill="#fff" stroke="var(--color-orange)" strokeWidth="2.5" />
-            <text x={x(i)} y={H - 8} fontSize="10.5" textAnchor="middle" fill="var(--color-ink-3)">
-              {i + 1}
-            </text>
-          </g>
-        ))}
-        <text x={x(data.length - 1) - 10} y={y(data[data.length - 1]) - 10} fontSize="12" fontWeight="600" textAnchor="end" fill="var(--color-orange)" className="tnum">
-          {data[data.length - 1].toFixed(1)}
-        </text>
-      </svg>
     </div>
   );
 }

@@ -88,6 +88,7 @@ export interface AttemptItem {
   examId: string;
   examTitle: string | null;
   subjectId: string;
+  schoolCode: string | null;
   subjectCode: string | null;
   subjectName: string | null;
   score: number;
@@ -140,6 +141,22 @@ export interface SchoolMaterial {
     version_number: number;
     original_filename: string;
     mime_type: string;
+    size_bytes: number;
+    slide_count: number;
+    processed_at: string | null;
+  };
+}
+
+/** Per-subject materials list: one entry per ready version, no subject fields. */
+export interface SubjectMaterial {
+  id: string;
+  title: string;
+  description: string | null;
+  createdAt: string;
+  version: {
+    id: string;
+    version_number: number;
+    original_filename: string;
     size_bytes: number;
     slide_count: number;
     processed_at: string | null;
@@ -242,6 +259,19 @@ export async function listSchoolMaterials(
   return (
     await get<{ materials: SchoolMaterial[] }>(
       `/Materials${qs({ schoolCode })}`,
+      signal,
+    )
+  ).materials;
+}
+
+export async function listSubjectMaterials(
+  schoolCode: string,
+  subjectCode: string,
+  signal?: AbortSignal,
+): Promise<SubjectMaterial[]> {
+  return (
+    await get<{ materials: SubjectMaterial[] }>(
+      `/Materials${qs({ schoolCode, subjectCode })}`,
       signal,
     )
   ).materials;
