@@ -66,7 +66,7 @@ export function FeedbackPanel({ previousTab }: { previousTab: string }) {
                   key={value}
                   className="flex cursor-pointer items-center gap-2.5 rounded-[8px] border border-line px-3 py-2.5 text-[13.5px] text-ink transition-colors hover:bg-paper-2 has-checked:border-orange has-checked:bg-orange-soft"
                 >
-                  <input type="radio" name="feedback-category" value={value} checked={category === value} onChange={() => setCategory(value)} className="size-4 accent-orange" />
+                  <input type="radio" name="feedback-category" value={value} checked={category === value} onChange={() => { setCategory(value); setSent(false); }} className="size-4 accent-orange" />
                   {FEEDBACK_CATEGORY_LABEL[value]}
                 </label>
               ))}
@@ -82,6 +82,7 @@ export function FeedbackPanel({ previousTab }: { previousTab: string }) {
               onChange={(event) => {
                 setMessage(event.target.value);
                 if (error) setError(null);
+                setSent(false);
               }}
               aria-invalid={error === "Nhập nội dung phản hồi" ? true : undefined}
               aria-describedby="feedback-counter"

@@ -35,46 +35,62 @@ function Message({ item, expanded, onToggle }: { item: AdminFeedback; expanded: 
   );
 }
 
-function StatusAction({ item, onChange }: { item: AdminFeedback; onChange: (status: FeedbackStatus) => void }) {
+function StatusAction({ item, busy, onChange }: { item: AdminFeedback; busy: boolean; onChange: (status: FeedbackStatus) => void }) {
   return item.status === "new" ? (
-    <Button variant="outline" onClick={() => onChange("resolved")} className="min-h-8 px-3 text-sm whitespace-nowrap">Đánh dấu đã xử lý</Button>
+    <Button variant="outline" busy={busy} onClick={() => onChange("resolved")} className="min-h-8 px-3 text-sm whitespace-nowrap">Đánh dấu đã xử lý</Button>
   ) : (
-    <Button variant="ghost" onClick={() => onChange("new")} className="min-h-8 px-3 text-sm whitespace-nowrap">Mở lại</Button>
+    <Button variant="ghost" busy={busy} onClick={() => onChange("new")} className="min-h-8 px-3 text-sm whitespace-nowrap">Mở lại</Button>
   );
 }
 
-function FeedbackList({ initial }: { initial: AdminFeedback[] }) {
+function FeedbackList({ initialAll, initialNew }: { initialAll: AdminFeedback[]; initialNew: AdminFeedback[] }) {
   const { reload } = useAdminData();
   const { toast } = useToast();
-  const [items, setItems] = useState(initial);
+  // `all` is capped by the server at the newest 500 rows; `newList` is always complete.
+  const [all, setAll] = useState(initialAll);
+  const [newList, setNewList] = useState(initialNew);
+  const [pending, setPending] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<Tab>("new");
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [open, setOpen] = useState<Set<string>>(new Set());
 
+  /** Puts one row version into both lists consistently. */
+  const put = (row: AdminFeedback) => {
+    setAll((list) => list.map((f) => (f.id === row.id ? row : f)));
+    setNewList((list) => {
+      const rest = list.filter((f) => f.id !== row.id);
+      return row.status === "new" ? [...rest, row].sort((a, b) => b.createdAt.localeCompare(a.createdAt)) : rest;
+    });
+  };
   const change = async (item: AdminFeedback, status: FeedbackStatus) => {
-    const apply = (next: FeedbackStatus) => (list: AdminFeedback[]) =>
-      list.map((f) => (f.id === item.id ? { ...f, status: next, ...(next === "new" ? { resolvedAt: null, resolvedBy: null } : {}) } : f));
-    setItems(apply(status));
+    if (pending.has(item.id)) return;
+    setPending((s) => new Set(s).add(item.id));
+    put({ ...item, status, ...(status === "new" ? { resolvedAt: null, resolvedBy: null } : {}) });
     try {
       await setFeedbackStatus(item.id, status);
       toast({ tone: "success", title: status === "resolved" ? "Đã đánh dấu đã xử lý" : "Đã mở lại phản hồi" });
       void reload();
     } catch (reason) {
-      setItems((list) => list.map((f) => (f.id === item.id ? item : f)));
+      put(item);
       toast({ tone: "error", title: "Không cập nhật được phản hồi", detail: reason instanceof Error ? reason.message : "Vui lòng thử lại." });
+    } finally {
+      setPending((s) => {
+        const next = new Set(s);
+        next.delete(item.id);
+        return next;
+      });
     }
   };
 
-  const count = (s: FeedbackStatus) => items.filter((f) => f.status === s).length;
   const tabs: Array<{ value: Tab; label: string; count: number }> = [
-    { value: "new", label: "Mới", count: count("new") },
-    { value: "resolved", label: "Đã xử lý", count: count("resolved") },
-    { value: "all", label: "Tất cả", count: items.length },
+    { value: "new", label: "Mới", count: newList.length },
+    { value: "resolved", label: "Đã xử lý", count: all.filter((f) => f.status === "resolved").length },
+    { value: "all", label: "Tất cả", count: all.length },
   ];
+  const source = tab === "new" ? newList : tab === "resolved" ? all.filter((f) => f.status === "resolved") : all;
   const needle = query.trim().toLocaleLowerCase("vi");
-  const rows = items
-    .filter((f) => tab === "all" || f.status === tab)
+  const rows = source
     .filter((f) => !needle || `${f.user?.fullName ?? ""} ${f.user?.email ?? ""} ${f.message}`.toLocaleLowerCase("vi").includes(needle));
   const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const current = Math.min(page, pages);
@@ -88,7 +104,7 @@ function FeedbackList({ initial }: { initial: AdminFeedback[] }) {
     });
 
   let empty;
-  if (!items.length) empty = <EmptyLine>Chưa có phản hồi nào.</EmptyLine>;
+  if (!all.length && !newList.length) empty = <EmptyLine>Chưa có phản hồi nào.</EmptyLine>;
   else if (needle)
     empty = (
       <EmptyLine>
@@ -129,7 +145,7 @@ function FeedbackList({ initial }: { initial: AdminFeedback[] }) {
                     </td>
                     <td className={TD}><Message item={f} expanded={open.has(f.id)} onToggle={() => toggle(f.id)} /></td>
                     <td className={cx(TD, "hidden whitespace-nowrap text-ink/70 @4xl:table-cell")}>{formatAdminDate(f.createdAt)}</td>
-                    <td className={cx(TD, "text-right")}><StatusAction item={f} onChange={(s) => void change(f, s)} /></td>
+                    <td className={cx(TD, "text-right")}><StatusAction item={f} busy={pending.has(f.id)} onChange={(s) => void change(f, s)} /></td>
                   </tr>
                 ))}
               </tbody>
@@ -146,7 +162,7 @@ function FeedbackList({ initial }: { initial: AdminFeedback[] }) {
                     {f.status === "resolved" && <Badge tone="success">Đã xử lý</Badge>}
                   </div>
                   <Message item={f} expanded={open.has(f.id)} onToggle={() => toggle(f.id)} />
-                  <div><StatusAction item={f} onChange={(s) => void change(f, s)} /></div>
+                  <div><StatusAction item={f} busy={pending.has(f.id)} onChange={(s) => void change(f, s)} /></div>
                 </li>
               ))}
             </ul>
@@ -162,15 +178,15 @@ function FeedbackList({ initial }: { initial: AdminFeedback[] }) {
 }
 
 export function FeedbackView() {
-  const [items, setItems] = useState<AdminFeedback[] | null>(null);
+  const [lists, setLists] = useState<{ all: AdminFeedback[]; fresh: AdminFeedback[] } | null>(null);
   const [failed, setFailed] = useState(false);
   const [key, setKey] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
-    listFeedback(undefined, controller.signal)
-      .then((list) => {
-        setItems(list);
+    Promise.all([listFeedback(undefined, controller.signal), listFeedback("new", controller.signal)])
+      .then(([all, fresh]) => {
+        setLists({ all, fresh });
         setFailed(false);
       })
       .catch(() => {
@@ -181,10 +197,10 @@ export function FeedbackView() {
 
   const retry = () => {
     setFailed(false);
-    setItems(null);
+    setLists(null);
     setKey((k) => k + 1);
   };
-  if (failed && !items) return <ErrorBlock onRetry={retry} />;
-  if (!items) return <SkeletonView kind="table" />;
-  return <FeedbackList initial={items} />;
+  if (failed && !lists) return <ErrorBlock onRetry={retry} />;
+  if (!lists) return <SkeletonView kind="table" />;
+  return <FeedbackList initialAll={lists.all} initialNew={lists.fresh} />;
 }

@@ -162,7 +162,9 @@ function DashboardView({ user, home }: { user: AuthUser; home: School }) {
   const router = useRouter();
   const schoolId = home.id;
   const [activeTab, setActiveTab] = useState("tong-quan");
+  // Last tab that was not the feedback form, kept in sync for Back/Forward navigation too.
   const [tabBeforeFeedback, setTabBeforeFeedback] = useState("tong-quan");
+  if (activeTab !== "gop-y" && tabBeforeFeedback !== activeTab) setTabBeforeFeedback(activeTab);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
@@ -300,7 +302,6 @@ function DashboardView({ user, home }: { user: AuthUser; home: School }) {
   };
 
   const navigateToTab = (tabId: string) => {
-    if (tabId === "gop-y" && activeTab !== "gop-y") setTabBeforeFeedback(activeTab);
     setActiveTab(tabId);
     setIsMobileMenuOpen(false);
     const url = new URL(window.location.href);
