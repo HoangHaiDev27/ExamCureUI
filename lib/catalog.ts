@@ -1,5 +1,7 @@
 import { apiRequest } from "./api";
 
+export { codeFromRouteId, subjectRouteId } from "./route-ids";
+
 export type DifficultyCode = "basic" | "medium" | "advanced";
 export type SubjectKind = "code" | "math" | "econ" | "theory" | "english";
 
@@ -286,18 +288,6 @@ export function difficultyLabel(
   d: DifficultyCode | null | undefined,
 ): string | null {
   return d ? (DIFFICULTY[d] ?? null) : null;
-}
-export function subjectRouteId(schoolId: string, code: string): string {
-  return `${schoolId}-${code.toLowerCase()}`;
-}
-export function codeFromRouteId(
-  schoolId: string,
-  routeId: string,
-): string | null {
-  const prefix = `${schoolId}-`;
-  if (!routeId.toLowerCase().startsWith(prefix.toLowerCase())) return null;
-  const code = routeId.slice(prefix.length).replace(/-k\d+$/i, "");
-  return code || null;
 }
 export function formatFileSize(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) return "0 B";

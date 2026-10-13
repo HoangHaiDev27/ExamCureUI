@@ -17,9 +17,12 @@ import {
   X,
   Check,
 } from "lucide-react";
-import type { Question, School, Subject } from "@/lib/types";
+import type { School, Subject } from "@/lib/types";
+import { submitAttempt, subjectRouteId } from "@/lib/catalog";
+import { buildSubmitPayload, type RoomQuestion } from "@/lib/exam-helpers";
 import { SchoolMark } from "@/components/SchoolMark";
-import { STUDENT, mssvFor, examCodeFor } from "@/lib/student";
+import { examCodeFor } from "@/lib/student";
+import { useAuth } from "@/lib/auth";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -31,21 +34,36 @@ function fmt(sec: number): string {
   return h > 0 ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
+export type RoomSubject = Pick<Subject, "id" | "code" | "name">;
+export interface RoomExam {
+  id: string;
+  title: string;
+  durationMinutes: number;
+}
+
 export function ExamRoom({
   school,
   subject,
+  exam,
   questions,
+  positions,
 }: {
   school: School;
-  subject: Subject;
-  questions: Question[];
+  subject: RoomSubject;
+  exam: RoomExam;
+  questions: RoomQuestion[];
+  /** positions[i][j] = real option position of the j-th rendered option of question i. */
+  positions: number[][];
 }) {
   const router = useRouter();
   const total = questions.length;
   const { theme } = school;
   const examCode = examCodeFor(subject.id);
-  const mssv = mssvFor(school.id);
-  const durationSec = subject.durationMin * 60;
+  const user = useAuth();
+  const studentName = user?.name?.trim() || "—";
+  const mssv = user?.mssv?.trim() || "—";
+  const durationSec = exam.durationMinutes * 60;
+  const routeId = subjectRouteId(school.id, subject.code);
 
   const [answers, setAnswers] = useState<number[]>(() => Array(total).fill(-1));
   const [flagged, setFlagged] = useState<boolean[]>(() => Array(total).fill(false));
@@ -56,38 +74,41 @@ export function ExamRoom({
   const [isLocked, setIsLocked] = useState(false);
   const [finishChecked, setFinishChecked] = useState(false);
   const submittedRef = useRef(false);
+  const autoSubmitTriedRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
 
   const answeredCount = answers.filter((a) => a >= 0).length;
   const flaggedCount = flagged.filter(Boolean).length;
   const danger = timeLeft <= 300;
 
-  const finish = useCallback(() => {
+  const finish = useCallback(async () => {
     if (submittedRef.current) return;
     submittedRef.current = true;
-    const attempt = {
-      schoolId: school.id,
-      subjectId: subject.id,
-      answers,
-      flagged,
-      durationSec,
-      spentSec: durationSec - timeLeft,
-      submittedAt: Date.now(),
-    };
+    setSubmitting(true);
+    setSubmitError(null);
     try {
-      sessionStorage.setItem(
-        `thithu:attempt:${school.id}:${subject.id}`,
-        JSON.stringify(attempt)
+      const result = await submitAttempt(
+        exam.id,
+        buildSubmitPayload(questions, positions, answers, durationSec - timeLeft),
       );
-    } catch {
-      /* ignore storage errors */
+      setAttemptId(result.attemptId);
+      if (school.id === "fptu") {
+        setSubmitOpen(false);
+        setIsLocked(true);
+      } else {
+        router.push(`/exam/${school.id}/${routeId}/result?attempt=${result.attemptId}`);
+      }
+    } catch (reason) {
+      // Keep the answers on screen and allow another attempt.
+      submittedRef.current = false;
+      setSubmitError(reason instanceof Error ? reason.message : "Không thể nộp bài. Vui lòng thử lại.");
+      setSubmitOpen(true);
+    } finally {
+      setSubmitting(false);
     }
-    
-    if (school.id === "fptu") {
-      setIsLocked(true);
-    } else {
-      router.push(`/exam/${school.id}/${subject.id}/result`);
-    }
-  }, [answers, flagged, durationSec, timeLeft, school.id, subject.id, router]);
+  }, [answers, questions, positions, exam.id, durationSec, timeLeft, school.id, routeId, router]);
 
   // Countdown
   useEffect(() => {
@@ -99,9 +120,10 @@ export function ExamRoom({
 
   // Auto-submit when time runs out
   useEffect(() => {
-    if (timeLeft === 0) {
+    if (timeLeft === 0 && !autoSubmitTriedRef.current) {
+      autoSubmitTriedRef.current = true;
       setTimeout(() => {
-        finish();
+        void finish();
       }, 0);
     }
   }, [timeLeft, finish]);
@@ -157,7 +179,7 @@ export function ExamRoom({
           </div>
           <h1 className="text-xl font-bold text-[#25a26a] tracking-wider uppercase">Finish successfully!</h1>
           <div className="my-5 border-y border-slate-700 py-4 text-left space-y-2 text-slate-300 text-sm font-sans">
-            <p><strong>Thí sinh:</strong> {STUDENT.name}</p>
+            <p><strong>Thí sinh:</strong> {studentName}</p>
             <p><strong>MSSV:</strong> {mssv}</p>
             <p><strong>Học phần:</strong> {subject.name} ({subject.code})</p>
             <p><strong>Số câu đã trả lời:</strong> {answeredCount}/{total}</p>
@@ -168,7 +190,7 @@ export function ExamRoom({
           </p>
           <button
             onClick={() => {
-              router.push(`/exam/${school.id}/${subject.id}/result`);
+              router.push(`/exam/${school.id}/${routeId}/result${attemptId ? `?attempt=${attemptId}` : ""}`);
             }}
             className="w-full h-11 rounded-md bg-[#d85f18] text-[14px] font-bold uppercase tracking-wider text-white transition-all hover:bg-orange-dark shadow-md"
           >
@@ -191,7 +213,7 @@ export function ExamRoom({
               <span className="text-slate-500">Machine:</span> <span className="font-semibold text-slate-900">DESKTOP-G3FCS4L</span>
             </div>
             <div>
-              <span className="text-slate-500">Duration:</span> <span className="font-semibold text-slate-900">{subject.durationMin} minutes</span>
+              <span className="text-slate-500">Duration:</span> <span className="font-semibold text-slate-900">{exam.durationMinutes} minutes</span>
             </div>
             <div>
               <span className="text-slate-500">Q mark:</span> <span className="font-bold text-[#0000ff]">1</span>
@@ -401,7 +423,9 @@ export function ExamRoom({
             timeLeft={timeLeft}
             theme={theme}
             onClose={() => setSubmitOpen(false)}
-            onConfirm={finish}
+            onConfirm={() => void finish()}
+            submitting={submitting}
+            error={submitError}
             schoolId={school.id}
           />
         )}
@@ -416,6 +440,7 @@ export function ExamRoom({
         subject={subject}
         examCode={examCode}
         mssv={mssv}
+        studentName={studentName}
         timeLeft={timeLeft}
         danger={danger}
         onExit={() => {
@@ -648,7 +673,9 @@ export function ExamRoom({
           timeLeft={timeLeft}
           theme={theme}
           onClose={() => setSubmitOpen(false)}
-          onConfirm={finish}
+          onConfirm={() => void finish()}
+          submitting={submitting}
+          error={submitError}
           schoolId={school.id}
         />
       )}
@@ -696,14 +723,16 @@ function ExamHeader({
   subject,
   examCode,
   mssv,
+  studentName,
   timeLeft,
   danger,
   onExit,
 }: {
   school: School;
-  subject: Subject;
+  subject: RoomSubject;
   examCode: string;
   mssv: string;
+  studentName: string;
   timeLeft: number;
   danger: boolean;
   onExit: () => void;
@@ -750,7 +779,7 @@ function ExamHeader({
           </div>
           <div className="ml-auto flex items-center gap-3 sm:gap-5">
             <div className="hidden text-right md:block">
-              <p className="text-[13px] font-medium leading-tight">{STUDENT.name}</p>
+              <p className="text-[13px] font-medium leading-tight">{studentName}</p>
               <p className="tnum text-[12px] text-ink-3">{mssv}</p>
             </div>
             <div className="text-right">
@@ -796,7 +825,7 @@ function ExamHeader({
           </span>
           <div className="ml-auto flex items-center gap-4">
             <span className="hidden text-ink-2 sm:inline">
-              {STUDENT.name} · <b className="tnum text-ink">{mssv}</b>
+              {studentName} · <b className="tnum text-ink">{mssv}</b>
             </span>
             {exitBtn(true)}
           </div>
@@ -827,7 +856,7 @@ function ExamHeader({
           <div className="flex items-center gap-5">
             <div className="border-r border-white/20 pr-4 text-right hidden md:block">
               <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-medium">Thí sinh</span>
-              <span className="text-[13.5px] font-semibold block text-slate-100">{STUDENT.name} ({mssv})</span>
+              <span className="text-[13.5px] font-semibold block text-slate-100">{studentName} ({mssv})</span>
             </div>
             <div className="text-right">
               <span className="text-[11px] uppercase tracking-wider text-slate-400 block font-medium">Thời gian còn lại</span>
@@ -868,7 +897,7 @@ function ExamHeader({
 
         <div className="ml-auto flex items-center gap-3 sm:gap-5">
           <div className="hidden text-right sm:block">
-            <p className="text-[13px] font-medium leading-tight">{STUDENT.name}</p>
+            <p className="text-[13px] font-medium leading-tight">{studentName}</p>
             <p className="tnum text-[12px] leading-tight opacity-80">{mssv}</p>
           </div>
           <Clock timeLeft={timeLeft} danger={danger} variant="dark" />
@@ -895,7 +924,7 @@ function Navigator({
   examCode,
   schoolId,
 }: {
-  questions: Question[];
+  questions: RoomQuestion[];
   total: number;
   current: number;
   answers: number[];
@@ -1198,6 +1227,8 @@ function SubmitModal({
   theme,
   onClose,
   onConfirm,
+  submitting,
+  error,
   schoolId,
 }: {
   total: number;
@@ -1207,6 +1238,8 @@ function SubmitModal({
   theme: School["theme"];
   onClose: () => void;
   onConfirm: () => void;
+  submitting: boolean;
+  error: string | null;
   schoolId?: string;
 }) {
   const unanswered = total - answeredCount;
@@ -1269,6 +1302,13 @@ function SubmitModal({
             </p>
           )}
 
+          {error && (
+            <div role="alert" className="mt-4 rounded-[7px] border border-danger bg-danger-soft px-3.5 py-3 text-[13.5px] text-danger font-sans">
+              {isFPTU ? "Submit failed. Your answers are kept — please try again." : "Chưa nộp được bài. Câu trả lời của bạn vẫn được giữ lại, hãy thử nộp lại."}
+              <span className="mt-1 block text-[12.5px] opacity-80">{error}</span>
+            </div>
+          )}
+
           <p className="mt-4 flex items-center gap-2 text-[13px] text-ink-3 font-sans">
             <Clock3 size={15} /> {isFPTU ? "Time remaining:" : "Thời gian còn lại:"}{" "}
             <span className="tnum font-medium text-ink">{fmt(timeLeft)}</span>
@@ -1284,10 +1324,11 @@ function SubmitModal({
           </button>
           <button
             onClick={onConfirm}
-            className="h-11 flex-1 rounded-[7px] text-[13.5px] font-bold text-white uppercase tracking-wider transition-[filter] hover:brightness-105"
+            disabled={submitting}
+            className="h-11 flex-1 disabled:opacity-60 rounded-[7px] text-[13.5px] font-bold text-white uppercase tracking-wider transition-[filter] hover:brightness-105"
             style={{ background: isFPTU ? "#d85f18" : theme.brand }}
           >
-            {isFPTU ? "Submit" : "Nộp bài"}
+            {submitting ? (isFPTU ? "Submitting…" : "Đang nộp…") : error ? (isFPTU ? "Retry" : "Nộp lại") : isFPTU ? "Submit" : "Nộp bài"}
           </button>
         </div>
       </div>

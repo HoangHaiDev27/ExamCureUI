@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -12,42 +12,15 @@ import {
   RotateCcw,
   Target,
 } from "lucide-react";
-import type { Question, School, Subject } from "@/lib/types";
+import type { School } from "@/lib/types";
+import type { AttemptDetail } from "@/lib/catalog";
+import { subjectRouteId } from "@/lib/catalog";
+import { optionIndex, summarizeAttempt } from "@/lib/exam-helpers";
 import { SchoolMark } from "@/components/SchoolMark";
 import { classify, TONE_COLOR } from "@/lib/grade";
 import { examCodeFor } from "@/lib/student";
 
 const LETTERS = ["A", "B", "C", "D"];
-
-function hash(str: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-interface Attempt {
-  answers: number[];
-  flagged: boolean[];
-  spentSec: number;
-}
-
-/** Deterministic demo attempt — used for SSR & direct visits. */
-function demoAttempt(subjectId: string, questions: Question[], durationSec: number): Attempt {
-  const answers = questions.map((q, i) => {
-    const r = hash(subjectId + "q" + i) % 100;
-    if (r < 6) return -1; // bỏ trống
-    if (r < 82) return q.answer; // đúng
-    return (q.answer + 1) % q.options.length; // sai
-  });
-  return {
-    answers,
-    flagged: questions.map((_, i) => hash(subjectId + "f" + i) % 5 === 0),
-    spentSec: Math.round(durationSec * 0.68),
-  };
-}
 
 function fmtDuration(sec: number): string {
   const m = Math.floor(sec / 60);
@@ -55,82 +28,25 @@ function fmtDuration(sec: number): string {
   return `${m} phút ${s.toString().padStart(2, "0")} giây`;
 }
 
-/** Bell-ish cohort distribution over score buckets 0..10. */
-function distribution(subjectId: string): number[] {
-  const mean = 6 + (hash(subjectId) % 18) / 10; // 6.0–7.7
-  const bins: number[] = [];
-  for (let x = 0; x <= 10; x++) {
-    const d = x - mean;
-    const v = Math.exp(-(d * d) / 4.2); // gaussian
-    bins.push(Math.round(v * 1000));
-  }
-  return bins;
-}
-
 export function ResultView({
   school,
-  subject,
-  questions,
+  attempt,
 }: {
   school: School;
-  subject: Subject;
-  questions: Question[];
+  attempt: AttemptDetail;
 }) {
+  const { subject, questions } = attempt;
   const total = questions.length;
   const { theme } = school;
-  const durationSec = subject.durationMin * 60;
-  const examCode = examCodeFor(subject.id);
-
-  const [attempt, setAttempt] = useState<Attempt>(() =>
-    demoAttempt(subject.id, questions, durationSec)
-  );
+  const examCode = examCodeFor(attempt.exam.id);
+  const routeId = subjectRouteId(subject.schoolCode, subject.code);
   const [open, setOpen] = useState<number | null>(null);
 
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(`thithu:attempt:${school.id}:${subject.id}`);
-      if (raw) {
-        const a = JSON.parse(raw) as Attempt;
-        if (Array.isArray(a.answers) && a.answers.length === total) {
-          setTimeout(() => {
-            setAttempt(a);
-          }, 0);
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }, [school.id, subject.id, total]);
-
-  const { correct, wrong, blank, score10, accuracy } = useMemo(() => {
-    let c = 0,
-      w = 0,
-      b = 0;
-    attempt.answers.forEach((ans, i) => {
-      if (ans < 0) b++;
-      else if (ans === questions[i].answer) c++;
-      else w++;
-    });
-    const score = Math.round((c / total) * 100) / 10;
-    const answered = c + w;
-    return {
-      correct: c,
-      wrong: w,
-      blank: b,
-      score10: score,
-      accuracy: answered ? Math.round((c / answered) * 100) : 0,
-    };
-  }, [attempt, questions, total]);
+  const { correct, wrong, blank, accuracy } = useMemo(() => summarizeAttempt(questions), [questions]);
+  const score10 = attempt.score;
 
   const grade = classify(score10);
   const gradeColor = TONE_COLOR[grade.tone];
-
-  const bins = useMemo(() => distribution(subject.id), [subject.id]);
-  const maxBin = Math.max(...bins);
-  const studentBucket = Math.min(10, Math.round(score10));
-  const totalCohort = bins.reduce((a, b) => a + b, 0);
-  const below = bins.slice(0, studentBucket).reduce((a, b) => a + b, 0);
-  const percentile = Math.round((below / totalCohort) * 100);
 
   return (
     <div className="min-h-[100dvh] bg-paper-2">
@@ -149,13 +65,13 @@ export function ResultView({
           </div>
           <div className="ml-auto flex items-center gap-2">
             <Link
-              href={`/exam/${school.id}/${subject.id}`}
+              href={`/exam/${subject.schoolCode}/${routeId}?exam=${attempt.exam.id}`}
               className="inline-flex h-9 items-center gap-1.5 rounded-[6px] border border-line-strong bg-paper px-3.5 text-[13px] font-medium text-ink hover:bg-paper-2"
             >
-              <RotateCcw size={15} /> Thi lại
+              <RotateCcw size={15} /> Làm lại
             </Link>
             <Link
-              href="/dashboard"
+              href="/dashboard?tab=mon-hoc"
               className="inline-flex h-9 items-center rounded-[6px] px-3.5 text-[13px] font-medium text-white"
               style={{ background: theme.brand }}
             >
@@ -215,9 +131,10 @@ export function ResultView({
             </div>
             <div className="mt-3 divide-y divide-line overflow-hidden rounded-[10px] border border-line bg-paper">
               {questions.map((q, i) => {
-                const chosen = attempt.answers[i];
-                const isCorrect = chosen === q.answer;
-                const isBlank = chosen < 0;
+                const chosen = optionIndex(q.options, q.selectedPosition);
+                const answerIdx = optionIndex(q.options, q.correctPosition);
+                const isCorrect = q.isCorrect;
+                const isBlank = q.selectedPosition === null;
                 const expanded = open === i;
                 return (
                   <div key={q.id}>
@@ -227,7 +144,7 @@ export function ResultView({
                     >
                       <StatusBadge state={isBlank ? "blank" : isCorrect ? "correct" : "wrong"} index={i + 1} />
                       <span className="min-w-0 flex-1">
-                        <span className="line-clamp-1 text-[14px] text-ink">{q.prompt}</span>
+                        <span className="line-clamp-1 text-[14px] text-ink">{q.prompt ?? "(Câu hỏi không còn tồn tại)"}</span>
                         <span className="mt-0.5 block text-[12.5px] text-ink-3">
                           {isBlank ? (
                             "Bỏ trống"
@@ -235,12 +152,12 @@ export function ResultView({
                             <>
                               Bạn chọn{" "}
                               <b style={{ color: isCorrect ? "var(--color-green)" : "var(--color-danger)" }}>
-                                {LETTERS[chosen]}
+                                {LETTERS[chosen] ?? "?"}
                               </b>
                               {!isCorrect && (
                                 <>
                                   {" · Đáp án đúng "}
-                                  <b className="text-green">{LETTERS[q.answer]}</b>
+                                  <b className="text-green">{LETTERS[answerIdx] ?? "?"}</b>
                                 </>
                               )}
                             </>
@@ -255,21 +172,9 @@ export function ResultView({
 
                     {expanded && (
                       <div className="border-t border-line bg-paper-2 px-4 py-4">
-                        {q.code && (
-                          <pre className="mb-3 overflow-x-auto rounded-[7px] border border-line bg-[#1a1d21] p-3.5 font-mono text-[13px] leading-relaxed text-[#e6e8eb]">
-                            <code>{q.code}</code>
-                          </pre>
-                        )}
-                        {q.formula && (
-                          <div className="mb-3 rounded-[7px] border-l-[3px] border-line-strong bg-paper px-3.5 py-2.5">
-                            <p className="whitespace-pre-line font-display text-[15px] italic text-ink">
-                              {q.formula}
-                            </p>
-                          </div>
-                        )}
                         <div className="space-y-2">
                           {q.options.map((opt, oi) => {
-                            const isAns = oi === q.answer;
+                            const isAns = oi === answerIdx;
                             const isChosenWrong = oi === chosen && !isCorrect;
                             return (
                               <div
@@ -301,19 +206,21 @@ export function ResultView({
                                 >
                                   {LETTERS[oi]}
                                 </span>
-                                <span className="flex-1 whitespace-pre-line text-ink">{opt}</span>
+                                <span className="flex-1 whitespace-pre-line text-ink">{opt.content}</span>
                                 {isAns && <Check size={16} className="shrink-0 text-green" />}
                                 {isChosenWrong && <CircleX size={16} className="shrink-0 text-danger" />}
                               </div>
                             );
                           })}
                         </div>
-                        <div className="mt-3 rounded-[7px] border border-blue-soft bg-blue-soft px-3.5 py-3">
-                          <p className="text-[12px] font-semibold uppercase tracking-wide text-blue-dark">
-                            Lời giải
-                          </p>
-                          <p className="mt-1 text-[13.5px] leading-relaxed text-ink">{q.explain}</p>
-                        </div>
+                        {q.explanation && (
+                          <div className="mt-3 rounded-[7px] border border-blue-soft bg-blue-soft px-3.5 py-3">
+                            <p className="text-[12px] font-semibold uppercase tracking-wide text-blue-dark">
+                              Lời giải
+                            </p>
+                            <p className="mt-1 text-[13.5px] leading-relaxed text-ink">{q.explanation}</p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -322,53 +229,10 @@ export function ResultView({
             </div>
           </section>
 
-          {/* Distribution */}
+          {/* Study tip */}
           <section className="order-1 lg:order-2">
             <div className="lg:sticky lg:top-6">
-              <h2 className="text-[15px] font-semibold">Phổ điểm thí sinh</h2>
-              <p className="mt-0.5 text-[12.5px] text-ink-3">
-                So với thí sinh cùng môn {subject.code} tại {school.abbr}
-              </p>
-
-              <div className="mt-3 rounded-[10px] border border-line bg-paper p-4 shadow-[var(--shadow-1)]">
-                <div className="flex h-[140px] items-end gap-[3px]">
-                  {bins.map((v, x) => {
-                    const isMe = x === studentBucket;
-                    return (
-                      <div key={x} className="flex flex-1 flex-col items-center justify-end">
-                        <div
-                          className="w-full rounded-t-[3px] transition-all"
-                          style={{
-                            height: `${Math.max(4, (v / maxBin) * 120)}px`,
-                            background: isMe ? theme.brand : "var(--color-paper-3)",
-                            border: isMe ? "none" : "1px solid var(--color-line)",
-                          }}
-                          title={`${x} điểm`}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-1.5 flex gap-[3px]">
-                  {bins.map((_, x) => (
-                    <span key={x} className="tnum flex-1 text-center text-[10px] text-ink-3">
-                      {x}
-                    </span>
-                  ))}
-                </div>
-
-                <div className="mt-3 rounded-[7px] bg-paper-2 px-3 py-2.5 text-center">
-                  <p className="text-[13px] text-ink-2">
-                    Bạn đạt <b className="tnum text-ink">{score10.toFixed(1)}</b> điểm — cao hơn{" "}
-                    <b className="tnum" style={{ color: theme.brand }}>
-                      ~{percentile}%
-                    </b>{" "}
-                    thí sinh
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-3 rounded-[10px] border border-line bg-paper p-4 text-[13px] text-ink-2 shadow-[var(--shadow-1)]">
+              <div className="rounded-[10px] border border-line bg-paper p-4 text-[13px] text-ink-2 shadow-[var(--shadow-1)]">
                 <p className="font-medium text-ink">Gợi ý ôn tập</p>
                 <p className="mt-1 leading-relaxed">
                   {wrong + blank > 0

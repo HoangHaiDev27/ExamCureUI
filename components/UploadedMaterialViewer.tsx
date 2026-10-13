@@ -14,7 +14,7 @@ type MaterialPayload = {
   slides: Slide[];
 };
 
-export function UploadedMaterialViewer({ school, subject, versionId }: { school: School; subject: Subject; versionId: string }) {
+export function UploadedMaterialViewer({ school, subject, versionId }: { school: School; subject: Pick<Subject, "id" | "code" | "name">; versionId: string }) {
   const user = useAuth();
   const signedIn = Boolean(user);
   const [payload, setPayload] = useState<MaterialPayload | null>(null);

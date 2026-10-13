@@ -1,20 +1,18 @@
 import { notFound } from "next/navigation";
 import { getSchool } from "@/lib/schools";
-import { getSubject } from "@/lib/subjects";
-import { getExam } from "@/lib/questions";
-import { ExamRoom } from "@/components/exam/ExamRoom";
+import { ExamLoader } from "@/components/exam/ExamLoader";
 
 export default async function ExamPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ schoolId: string; subjectId: string }>;
+  searchParams: Promise<{ exam?: string | string[] }>;
 }) {
   const { schoolId, subjectId } = await params;
+  const { exam } = await searchParams;
   const school = getSchool(schoolId);
-  const subject = getSubject(schoolId, subjectId);
-  if (!school || !subject) notFound();
+  if (!school) notFound();
 
-  const questions = getExam(subject);
-
-  return <ExamRoom school={school} subject={subject} questions={questions} />;
+  return <ExamLoader school={school} routeId={subjectId} examId={typeof exam === "string" ? exam : undefined} />;
 }
