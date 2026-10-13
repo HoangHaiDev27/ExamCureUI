@@ -100,21 +100,19 @@ try {
     password: "proxy-password",
     fullName: "Proxy User",
   });
+  // Sign-up signs the user in directly: access token in the body, refresh token only in an HttpOnly cookie.
   assert.equal(registration.status, 201);
-  const verified = await post("/Auth/verify-otp", {
-    email: "proxy@example.com",
-    code: (await registration.json()).otp,
-  });
-  assert.equal(verified.status, 200);
-  const signedIn = await verified.json(),
-    initialCookie = cookie(verified);
+  const signedIn = await registration.json(),
+    initialCookie = cookie(registration);
   assert.ok(initialCookie);
   assert.ok(
-    verified.headers
+    registration.headers
       .getSetCookie()
       .some((c) => c.includes("HttpOnly") && c.includes("Path=/api/v1/Auth")),
   );
+  assert.ok(signedIn.token);
   assert.equal(signedIn.refreshToken, undefined);
+  assert.equal(signedIn.otp, undefined);
   const me = await fetch(base + "/api/v1/Users/me", {
     headers: { Authorization: `Bearer ${signedIn.token}` },
   });
@@ -170,7 +168,7 @@ try {
     401,
   );
   console.log(
-    "Production proxy passed: OTP/session cookies, admin checks, refresh replay and logout revocation.",
+    "Production proxy passed: sign-up session cookies, admin checks, refresh replay and logout revocation.",
   );
 } finally {
   for (const child of [next, api]) {
