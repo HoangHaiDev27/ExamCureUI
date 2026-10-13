@@ -26,6 +26,7 @@ import { ApiError } from "@/lib/api";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { clearDraft, loadDraft, newStored, remainingSec, restoreState, saveDraft, snapshotState } from "@/lib/exam-draft";
 import { getAuth } from "@/lib/auth";
+import { FPT_DASHBOARD_ACCENT } from "@/lib/theme";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -213,7 +214,7 @@ export function ExamRoom({
 
   if (isLocked) {
     return (
-      <div className="flex h-[100dvh] flex-col items-center justify-center bg-[#2b3542] text-white p-6 font-mono">
+      <div style={school.id === "fptu" ? FPT_DASHBOARD_ACCENT : undefined} className="flex h-[100dvh] flex-col items-center justify-center bg-[#2b3542] text-white p-6 font-mono">
         <div className="w-full max-w-md rounded-lg border-2 border-slate-700 bg-[#1e2530] p-6 shadow-2xl text-center">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-green/10 text-green mb-4 border border-green">
             <Check size={28} strokeWidth={3} />
@@ -233,7 +234,7 @@ export function ExamRoom({
             onClick={() => {
               router.push(`/exam/${school.id}/${routeId}/result${attemptId ? `?attempt=${attemptId}` : ""}`);
             }}
-            className="w-full h-11 rounded-md bg-[#d85f18] text-[14px] font-bold uppercase tracking-wider text-white transition-all hover:bg-orange-dark shadow-md"
+            className="w-full h-11 rounded-md bg-orange text-[14px] font-bold uppercase tracking-wider text-white transition-all hover:bg-orange-dark shadow-md"
           >
             Exit
           </button>
@@ -244,7 +245,7 @@ export function ExamRoom({
 
   if (school.id === "fptu") {
     return (
-      <div className="flex h-[100dvh] flex-col overflow-hidden bg-[#f0f0f0] text-black font-sans select-none p-2 border border-slate-350">
+      <div style={FPT_DASHBOARD_ACCENT} className="flex h-[100dvh] flex-col overflow-hidden bg-[#f0f0f0] text-black font-sans select-none p-2 border border-slate-350">
         
         {/* TOP EOS HEADER */}
         <div className="flex flex-none items-start justify-between bg-[#f0f0f0] p-3 border border-slate-300 rounded shadow-sm gap-4 mb-2">
@@ -257,11 +258,11 @@ export function ExamRoom({
               <span className="text-slate-500">Duration:</span> <span className="font-semibold text-slate-900">{exam.durationMinutes} minutes</span>
             </div>
             <div>
-              <span className="text-slate-500">Q mark:</span> <span className="font-bold text-[#0000ff]">1</span>
+              <span className="text-slate-500">Q mark:</span> <span className="font-bold text-orange-dark">1</span>
             </div>
 
             <div>
-              <span className="text-slate-500">Student:</span> <span className="font-bold text-[#0000ff]">{mssv}</span>
+              <span className="text-slate-500">Student:</span> <span className="font-bold text-orange-dark">{mssv}</span>
             </div>
             <div className="flex items-center gap-1">
               <span className="text-slate-500">Open Code:</span> 
@@ -269,14 +270,14 @@ export function ExamRoom({
               <button disabled className="h-4.5 border border-slate-400 bg-slate-200 text-slate-400 px-1 text-[10px] rounded">Show Question</button>
             </div>
             <div>
-              <span className="text-slate-500">Total Marks:</span> <span className="font-bold text-[#0000ff]">{total}</span>
+              <span className="text-slate-500">Total Marks:</span> <span className="font-bold text-orange-dark">{total}</span>
             </div>
 
             <div>
               <span className="text-slate-500">Server:</span> <span className="font-semibold text-slate-900">Eng_EOS_14032</span>
             </div>
             <div>
-              <span className="text-slate-500">Exam Code:</span> <span className="font-bold text-[#0000ff]">{examCode}</span>
+              <span className="text-slate-500">Exam Code:</span> <span className="font-bold text-orange-dark">{examCode}</span>
             </div>
             <div className="flex items-center gap-1.5 text-[10px]">
               <span className="text-slate-500">Vol:</span> 
@@ -291,7 +292,7 @@ export function ExamRoom({
           {/* TIMER IN THE MIDDLE */}
           <div className="flex items-center gap-3.5 bg-white border border-slate-300 rounded px-6 py-1.5 shadow-inner">
             <span className="text-[13px] font-bold text-slate-500 font-mono">Time Left:</span>
-            <span className="text-[40px] font-bold leading-none text-[#0000ff] font-mono tracking-tight min-w-[110px] text-center">
+            <span className="text-[40px] font-bold leading-none text-orange-dark font-mono tracking-tight min-w-[110px] text-center">
               {fmt(timeLeft)}
             </span>
             {/* Vietnam Flag */}
@@ -309,7 +310,7 @@ export function ExamRoom({
                 type="checkbox" 
                 checked={finishChecked} 
                 onChange={(e) => setFinishChecked(e.target.checked)}
-                className="w-4 h-4 rounded text-orange focus:ring-orange cursor-pointer border-slate-300"
+                className="w-4 h-4 rounded accent-orange focus:ring-orange cursor-pointer border-slate-300"
               />
               <span className="font-mono">I want to finish the exam.</span>
             </label>
@@ -319,7 +320,7 @@ export function ExamRoom({
               }}
               className={`h-7 w-20 border text-[11px] font-bold uppercase rounded shadow transition-all ${
                 finishChecked 
-                  ? "bg-[#ffff99] hover:bg-[#ffff66] text-black border-slate-400 active:scale-95 cursor-pointer" 
+                  ? "bg-orange hover:bg-orange-dark text-white border-orange-dark active:scale-95 cursor-pointer" 
                   : "bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed"
               }`}
             >
@@ -340,7 +341,7 @@ export function ExamRoom({
           
           {/* Question selection box */}
           <div className="w-[140px] flex-none flex flex-col border border-slate-300 rounded bg-[#fcfcfc] p-3 shadow-sm">
-            <span className="text-[12.5px] font-bold text-[#0000ff] uppercase tracking-wider mb-3 font-mono">Answer</span>
+            <span className="text-[12.5px] font-bold text-orange-dark uppercase tracking-wider mb-3 font-mono">Answer</span>
             
             {/* Options Checkboxes */}
             <div className="flex-1 space-y-3.5">
@@ -354,10 +355,10 @@ export function ExamRoom({
                   >
                     <span className={`w-4.5 h-4.5 border rounded flex items-center justify-center transition-all ${
                       selected 
-                        ? "border-[#0000ff] bg-[#0000ff]/10 text-[#0000ff]" 
+                        ? "border-orange bg-orange-soft text-orange-dark"
                         : "border-slate-400 bg-white group-hover:border-slate-500"
                     }`}>
-                      {selected && <div className="w-2.5 h-2.5 bg-[#0000ff] rounded-[1px]" />}
+                      {selected && <div className="w-2.5 h-2.5 bg-orange rounded-[1px]" />}
                     </span>
                     <span className="text-[13px] font-bold text-slate-700 font-mono">{LETTERS[oi]}</span>
                   </button>
@@ -418,7 +419,7 @@ export function ExamRoom({
                   onClick={() => go(i)}
                   className={`tnum w-7.5 h-7.5 border flex items-center justify-center text-[12.5px] font-bold font-mono rounded cursor-pointer transition-all ${
                     isCurrent
-                      ? "border-[#0000ff] bg-[#0000ff]/10 text-[#0000ff] ring-2 ring-[#0000ff]/20 font-black scale-105"
+                      ? "border-orange bg-orange-soft text-orange-dark ring-2 ring-orange/25 font-black scale-105"
                       : answered
                         ? "border-[#1e6b43] bg-[#22c55e] text-white hover:opacity-90"
                         : "border-slate-300 bg-[#e0e0e0] text-slate-600 hover:bg-slate-200"
@@ -437,7 +438,7 @@ export function ExamRoom({
                 type="checkbox" 
                 checked={finishChecked} 
                 onChange={(e) => setFinishChecked(e.target.checked)}
-                className="w-4 h-4 rounded text-orange focus:ring-orange cursor-pointer border-slate-300"
+                className="w-4 h-4 rounded accent-orange focus:ring-orange cursor-pointer border-slate-300"
               />
               <span>I want to finish the exam.</span>
             </label>
@@ -447,7 +448,7 @@ export function ExamRoom({
               }}
               className={`h-7 w-20 border text-[11px] font-bold uppercase rounded shadow transition-all ${
                 finishChecked 
-                  ? "bg-[#ffff99] hover:bg-[#ffff66] text-black border-slate-400 active:scale-95 cursor-pointer" 
+                  ? "bg-orange hover:bg-orange-dark text-white border-orange-dark active:scale-95 cursor-pointer" 
                   : "bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed"
               }`}
             >
@@ -1043,7 +1044,7 @@ function Navigator({
         <div className="border-t border-slate-200 bg-white px-5 py-4">
           <button
             onClick={onSubmit}
-            className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#d85f18] text-[14px] font-bold uppercase tracking-wider text-white transition-all hover:bg-orange-dark shadow-md"
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-orange text-[14px] font-bold uppercase tracking-wider text-white transition-all hover:bg-orange-dark shadow-md"
           >
             I want to finish the exam
           </button>
@@ -1389,7 +1390,7 @@ function SubmitModal({
             onClick={onConfirm}
             disabled={submitting}
             className="h-11 flex-1 disabled:opacity-60 rounded-[7px] text-[13.5px] font-bold text-white uppercase tracking-wider transition-[filter] hover:brightness-105"
-            style={{ background: isFPTU ? "#d85f18" : theme.brand }}
+            style={{ background: isFPTU ? "var(--color-orange)" : theme.brand }}
           >
             {submitting ? (isFPTU ? "Submitting…" : "Đang nộp…") : error ? (isFPTU ? "Retry" : "Nộp lại") : isFPTU ? "Submit" : "Nộp bài"}
           </button>
