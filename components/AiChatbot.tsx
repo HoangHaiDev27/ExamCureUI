@@ -108,6 +108,8 @@ export function AiChatbot() {
 
   // Chatbot dành cho sinh viên; khu quản trị có bảng/thao tác ở góc phải.
   if (pathname.startsWith("/admin")) return null;
+  // Phòng thi không được có trợ lý AI; trang kết quả (/result) vẫn giữ.
+  if (/^\/exam\/[^/]+\/[^/]+\/?$/.test(pathname)) return null;
 
   return (
     <div className="fixed bottom-4 right-4 z-[45] flex flex-col items-end sm:bottom-6 sm:right-6">
