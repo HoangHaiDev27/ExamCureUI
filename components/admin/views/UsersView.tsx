@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { changeUserRole, formatAdminDate, listUsers, type AdminUser, type UserRole } from "@/lib/admin";
-import { useAuth } from "@/lib/auth";
 import { useToast } from "../AdminData";
+import { useAdminUser } from "../AdminGuard";
 import { ConfirmDialog } from "../overlays";
 import { Avatar, Badge, EmptyLine, ErrorBlock, Pager, SearchBox, SkeletonView, TD, TH, TableCard, Tabs, Toolbar, cx } from "../ui";
 import { clip, schoolAbbr } from "./common";
@@ -31,7 +31,7 @@ const RoleText = ({ role }: { role: UserRole }) =>
   role === "admin" ? <span className="font-medium text-ink">Quản trị</span> : <span className="text-ink/70">Sinh viên</span>;
 
 export function UsersView() {
-  const me = useAuth()?.id;
+  const me = useAdminUser().id;
   const { toast } = useToast();
   const [users, setUsers] = useState<AdminUser[] | null>(null);
   const [failed, setFailed] = useState(false);

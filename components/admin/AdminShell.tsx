@@ -17,8 +17,9 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Logo } from "@/components/Logo";
-import { logout, useAuth } from "@/lib/auth";
+import { logout } from "@/lib/auth";
 import { FPT_DASHBOARD_ACCENT } from "@/lib/theme";
+import { useAdminUser } from "./AdminGuard";
 import { AdminDataProvider, ToastProvider, useAdminData, useToast } from "./AdminData";
 import { Drawer, Menu } from "./overlays";
 import { Avatar, IconButton, PopItem, cx } from "./ui";
@@ -46,7 +47,7 @@ function isActive(pathname: string, href: string) {
 const isExamDetail = (pathname: string) => /^\/admin\/de-thi\/[^/]+/.test(pathname);
 
 function ProfileRow() {
-  const user = useAuth();
+  const user = useAdminUser();
   const router = useRouter();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);

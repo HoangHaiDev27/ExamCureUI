@@ -1,16 +1,27 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { createContext, useContext, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ShieldAlert } from "lucide-react";
-import { refreshAuthProfile, useAuth, useAuthReady } from "@/lib/auth";
+import { refreshAuthProfile, useAuth, useAuthReady, type AuthUser } from "@/lib/auth";
+import { adminGateDecision, isAdminUser } from "@/lib/admin-gate";
 import { apiRequest } from "@/lib/api";
+
+const AdminUserContext = createContext<AuthUser | null>(null);
+
+/** The verified admin. Stays stable while the session is re-checked on route changes. */
+export function useAdminUser(): AuthUser {
+  const user = useContext(AdminUserContext);
+  if (!user) throw new Error("useAdminUser must be used inside <AdminGuard>");
+  return user;
+}
 
 // UI access follows the refreshed profile. Admin APIs independently verify
 // the session and current database role; no bootstrap token opens this UI.
 export function AdminGuard({ children }: { children: ReactNode }) {
   const user = useAuth();
   const checked = useAuthReady();
+  const [verified, setVerified] = useState<AuthUser | null>(null);
   const [showBootstrap, setShowBootstrap] = useState(false);
   const [bootstrapToken, setBootstrapToken] = useState("");
   const [busy, setBusy] = useState(false);
@@ -40,7 +51,13 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     } finally { setBusy(false); }
   };
 
-  if (!checked) {
+  // Latch the verified admin so the tree stays mounted while the profile is re-checked.
+  const decision = adminGateDecision(verified, user, checked);
+  if (user && isAdminUser(user)) {
+    if (!verified || verified.id !== user.id || verified.name !== user.name || verified.email !== user.email) setVerified(user);
+  } else if (verified && (user || checked)) setVerified(null);
+
+  if (decision === "loading") {
     return (
       <main className="grid min-h-[60vh] place-items-center px-5">
         <p className="text-[13.5px] text-ink-3">Đang kiểm tra quyền truy cập...</p>
@@ -48,8 +65,9 @@ export function AdminGuard({ children }: { children: ReactNode }) {
     );
   }
 
-  if (user?.role === "admin") {
-    return <>{children}</>;
+  if (decision === "allow") {
+    const active = user && isAdminUser(user) ? user : verified;
+    if (active) return <AdminUserContext.Provider value={active}>{children}</AdminUserContext.Provider>;
   }
 
   return (
