@@ -13,6 +13,7 @@ const profile = {
   email: "student@example.com",
   schoolId: "hust",
   role: "student",
+  mssv: "",
 };
 beforeEach(() => {
   vi.resetModules();
@@ -68,6 +69,7 @@ describe("ExamcureBe browser authentication", () => {
       name: "Student",
       schoolId: "hust",
       role: "student",
+      mssv: "",
     });
     expect(localStorage.getItem("examcure:supabase-auth")).toBeNull();
     expect(localStorage.getItem("examcure:profile")).not.toContain("token");

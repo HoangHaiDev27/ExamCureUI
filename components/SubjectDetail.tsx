@@ -53,6 +53,7 @@ export function SubjectDetail({
   examSets: ExamSet[];
 }) {
   const user = useAuth();
+  const signedIn = Boolean(user);
   const router = useRouter();
   const [uploadedMaterials, setUploadedMaterials] = useState<Material[] | null>(null);
   const [materialsError, setMaterialsError] = useState<string | null>(null);
@@ -65,7 +66,7 @@ export function SubjectDetail({
   }, [user, school.id, subject.code, router]);
 
   useEffect(() => {
-    if (!user?.token) return;
+    if (!signedIn) return;
     const controller = new AbortController();
     const query = new URLSearchParams({ schoolCode: school.id, subjectCode: subject.code });
     void apiRequest<{ materials: Array<{
@@ -88,10 +89,10 @@ export function SubjectDetail({
         setMaterialsError(error instanceof Error ? error.message : "Không thể tải giáo trình.");
       });
     return () => controller.abort();
-  }, [user?.token, school.id, subject.code]);
+  }, [signedIn, school.id, subject.code]);
 
-  const courseMaterials = user?.token ? uploadedMaterials || [] : [];
-  const materialsMessage = user?.token ? materialsError : "Đăng nhập để xem giáo trình do admin đăng.";
+  const courseMaterials = user ? uploadedMaterials || [] : [];
+  const materialsMessage = user ? materialsError : "Đăng nhập để xem giáo trình do admin đăng.";
 
   const grade = subject.lastScore != null ? classify(subject.lastScore) : null;
   const firstExamHref = `/exam/${school.id}/${subject.id}`;

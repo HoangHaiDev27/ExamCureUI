@@ -16,6 +16,7 @@ type MaterialPayload = {
 
 export function UploadedMaterialViewer({ school, subject, versionId }: { school: School; subject: Subject; versionId: string }) {
   const user = useAuth();
+  const signedIn = Boolean(user);
   const [payload, setPayload] = useState<MaterialPayload | null>(null);
   const [index, setIndex] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +24,7 @@ export function UploadedMaterialViewer({ school, subject, versionId }: { school:
   const subjectHref = `/schools/${school.id}/subjects/${subject.id}`;
 
   useEffect(() => {
-    if (!user?.token) return;
+    if (!signedIn) return;
     const controller = new AbortController();
     void apiRequest<MaterialPayload>(`/Materials/${versionId}/slides`, { signal: controller.signal })
       .then((data) => { setPayload(data); setError(null); setIndex(0); })
@@ -32,10 +33,10 @@ export function UploadedMaterialViewer({ school, subject, versionId }: { school:
         setError(reason instanceof Error ? reason.message : "Không thể tải nội dung slide.");
       });
     return () => controller.abort();
-  }, [user?.token, versionId]);
+  }, [signedIn, versionId]);
 
   const download = async () => {
-    if (!user?.token) { setError("Bạn cần đăng nhập để tải tài liệu."); return; }
+    if (!user) { setError("Bạn cần đăng nhập để tải tài liệu."); return; }
     setDownloading(true);
     try {
       const data = await apiRequest<{ url?: string }>(`/Materials/${versionId}/download`);
@@ -49,7 +50,7 @@ export function UploadedMaterialViewer({ school, subject, versionId }: { school:
   };
 
   const slide = payload?.slides[index];
-  const displayError = user?.token ? error : "Bạn cần đăng nhập để xem giáo trình này.";
+  const displayError = user ? error : "Bạn cần đăng nhập để xem giáo trình này.";
   return (
     <main className="mx-auto max-w-[900px] px-5 pb-20 lg:px-8">
       <nav className="flex flex-wrap items-center gap-1.5 py-5 text-[13px] text-ink-3">

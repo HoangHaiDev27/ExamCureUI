@@ -108,7 +108,7 @@ export function AdminConsole() {
   const [selectedVersionIds, setSelectedVersionIds] = useState<string[]>([]);
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
-  const token = user?.token || "";
+  const signedIn = Boolean(user);
 
   useEffect(() => {
     void apiRequest<{ services: ServiceStatus }>("/System/status", {}, { authenticated: false })
@@ -120,7 +120,7 @@ export function AdminConsole() {
     apiRequest<T>(path, init);
 
   const refresh = async () => {
-    if (!token) return;
+    if (!signedIn) return;
     setLoading(true);
     try {
       const data = await api<Overview>("/Admin/overview");
@@ -138,11 +138,11 @@ export function AdminConsole() {
   };
 
   useEffect(() => {
-    if (!token) return;
+    if (!signedIn) return;
     const timer = window.setTimeout(() => void refresh(), 0);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+  }, [signedIn]);
 
   const readyVersions = useMemo(
     () =>

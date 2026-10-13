@@ -22,12 +22,14 @@ export interface AuthUser {
   token?: string;
   role?: string;
   schoolId?: string;
+  mssv?: string;
 }
 type BackendUser = {
   id: string;
   fullName: string;
   email: string;
   schoolId: string;
+  mssv?: string;
   role: string;
   token?: string;
 };
@@ -74,6 +76,7 @@ function fromBackend(user: BackendUser): AuthUser {
     name: user.fullName,
     email: user.email,
     schoolId: user.schoolId,
+    ...(typeof user.mssv === "string" ? { mssv: user.mssv } : {}),
     role: normalizeRole(user.role),
     ...(user.token ? { token: user.token } : {}),
   };
