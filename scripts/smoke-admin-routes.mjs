@@ -26,21 +26,32 @@ try {
   }
   assert.ok(ready, `Next server must start: ${output}`);
   for (const cookie of ["", "examcure_role=admin", "examcure_role=student"]) {
-    for (const route of ["/quen-mat-khau", "/xac-thuc-otp", "/pricing", "/admin/noi-dung-ai"]) {
+    for (const route of ["/quen-mat-khau", "/xac-thuc-otp", "/pricing"]) {
       const response = await fetch(base + route, { headers: { cookie }, redirect: "manual" });
       assert.equal(response.status, 200, `${route} with ${cookie || "no cookie"} must not redirect`);
       assert.equal(response.headers.get("location"), null);
-      if (route.startsWith("/admin")) {
-        const html = await response.text();
-        assert.ok(html.includes("Đang kiểm tra quyền truy cập"), "admin UI must wait for profile verification");
-        assert.ok(!html.includes("Pipeline tài liệu và tạo đề"), "unverified SSR must not render the admin console");
-      }
     }
-    const admin = await fetch(base + "/admin", { headers: { cookie }, redirect: "manual" });
-    assert.equal(admin.status, 307);
-    assert.equal(new URL(admin.headers.get("location"), base).pathname, "/admin/noi-dung-ai");
+    for (const route of ["/admin", "/admin/mon-hoc", "/admin/tai-lieu", "/admin/de-thi", "/admin/nguoi-dung"]) {
+      const response = await fetch(base + route, { headers: { cookie }, redirect: "manual" });
+      assert.equal(response.status, 200, `${route} with ${cookie || "no cookie"} must render`);
+      assert.equal(response.headers.get("location"), null);
+      const html = await response.text();
+      assert.ok(html.includes("Đang kiểm tra quyền truy cập"), `${route}: admin UI must wait for profile verification`);
+      assert.ok(!html.includes("Tạo đề bằng AI"), `${route}: unverified SSR must not render the admin console`);
+    }
+    for (const [legacy, target] of [
+      ["/admin/noi-dung-ai", "/admin"],
+      ["/admin/bai-thi", "/admin/de-thi"],
+      ["/admin/cau-hoi", "/admin/de-thi"],
+      ["/admin/hoc-phan", "/admin/mon-hoc"],
+      ["/admin/truong", "/admin/mon-hoc"],
+    ]) {
+      const response = await fetch(base + legacy, { headers: { cookie }, redirect: "manual" });
+      assert.equal(response.status, 307, `${legacy} must redirect temporarily`);
+      assert.equal(new URL(response.headers.get("location"), base).pathname, target);
+    }
   }
-  console.log("Admin routes passed: recovery/public routes ignore stale cookies; admin waits for verification.");
+  console.log("Admin routes passed: recovery/public routes ignore stale cookies; admin waits for verification; legacy admin URLs redirect.");
 } finally {
   server.kill();
   if (server.exitCode === null) {
