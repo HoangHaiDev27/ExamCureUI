@@ -23,6 +23,7 @@ import {
   Menu,
   Search,
   LogOut,
+  MessageSquare,
   X,
 } from "lucide-react";
 import { getSchool } from "@/lib/schools";
@@ -69,6 +70,7 @@ import {
   trendDelta,
 } from "@/lib/dashboard-helpers";
 import { useResource } from "@/lib/useResource";
+import { FeedbackPanel } from "@/components/dashboard/FeedbackPanel";
 
 const NAV_GROUPS = [
   {
@@ -93,6 +95,10 @@ const NAV_GROUPS = [
       { id: "de-thi", label: "Đề thi gợi ý", icon: FileCheck2 },
       { id: "lich-su", label: "Lịch sử thi", icon: History }
     ]
+  },
+  {
+    title: "Hỗ trợ",
+    items: [{ id: "gop-y", label: "Góp ý & báo lỗi", icon: MessageSquare }]
   }
 ];
 
@@ -156,6 +162,7 @@ function DashboardView({ user, home }: { user: AuthUser; home: School }) {
   const router = useRouter();
   const schoolId = home.id;
   const [activeTab, setActiveTab] = useState("tong-quan");
+  const [tabBeforeFeedback, setTabBeforeFeedback] = useState("tong-quan");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
@@ -293,6 +300,7 @@ function DashboardView({ user, home }: { user: AuthUser; home: School }) {
   };
 
   const navigateToTab = (tabId: string) => {
+    if (tabId === "gop-y" && activeTab !== "gop-y") setTabBeforeFeedback(activeTab);
     setActiveTab(tabId);
     setIsMobileMenuOpen(false);
     const url = new URL(window.location.href);
@@ -1049,6 +1057,9 @@ function DashboardView({ user, home }: { user: AuthUser; home: School }) {
             </section>
           </div>
         )}
+
+        {/* Góp ý & báo lỗi Tab Content */}
+        {activeTab === "gop-y" && <FeedbackPanel previousTab={tabBeforeFeedback} />}
 
         {/* Lịch sử thi Tab Content */}
         {activeTab === "lich-su" && (

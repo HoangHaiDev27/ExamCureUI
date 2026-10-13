@@ -106,6 +106,22 @@ describe("admin fetchers", () => {
     expect(call().init.method).toBe("POST");
     expect(call().headers.get("Authorization")).toBe("Bearer tok");
   });
+  it("listFeedback unwraps, with and without a status filter", async () => {
+    reply({ feedback: [{ id: "f" }] });
+    expect(await a.listFeedback()).toEqual([{ id: "f" }]);
+    expect(call().url).toBe(`${base}/Admin/feedback`);
+    expect(call().headers.get("Authorization")).toBe("Bearer tok");
+    reply({ feedback: [] });
+    await a.listFeedback("new");
+    expect(call().url).toBe(`${base}/Admin/feedback?status=new`);
+  });
+  it("setFeedbackStatus patches the status", async () => {
+    reply({ id: "f/1", status: "resolved" });
+    expect(await a.setFeedbackStatus("f/1", "resolved")).toEqual({ id: "f/1", status: "resolved" });
+    expect(call().url).toBe(`${base}/Admin/feedback/f%2F1`);
+    expect(call().init.method).toBe("PATCH");
+    expect(JSON.parse(call().init.body as string)).toEqual({ status: "resolved" });
+  });
   it("deleteExam resolves on 204", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
     await expect(a.deleteExam("e")).resolves.toBeUndefined();

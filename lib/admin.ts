@@ -60,6 +60,7 @@ export interface ExamSummary {
 }
 export interface AdminOverview {
   admin: unknown;
+  feedbackNewCount: number;
   subjects: AdminSubject[];
   materials: AdminMaterial[];
   exams: ExamSummary[];
@@ -246,3 +247,24 @@ export function formatAdminDate(iso: string, now: Date = new Date()): string {
 
 export const formatSizeMB = (bytes: number): string =>
   `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 1 }).format(bytes / (1024 * 1024))} MB`;
+
+export type FeedbackStatus = "new" | "resolved";
+export interface AdminFeedback {
+  id: string;
+  category: "bug" | "content" | "suggestion" | "other";
+  message: string;
+  page: string | null;
+  status: FeedbackStatus;
+  createdAt: string;
+  resolvedAt: string | null;
+  resolvedBy: { id: string; fullName: string } | null;
+  user: { id: string; fullName: string; email: string; mssv: string; schoolId: string } | null;
+}
+export const listFeedback = async (status?: FeedbackStatus, signal?: AbortSignal) =>
+  (
+    await apiRequest<{ feedback: AdminFeedback[] }>(`/Admin/feedback${status ? `?status=${status}` : ""}`, {
+      ...(signal ? { signal } : {}),
+    })
+  ).feedback;
+export const setFeedbackStatus = (id: string, status: FeedbackStatus) =>
+  apiRequest<{ id: string; status: FeedbackStatus }>(`/Admin/feedback/${encodeURIComponent(id)}`, json("PATCH", { status }));

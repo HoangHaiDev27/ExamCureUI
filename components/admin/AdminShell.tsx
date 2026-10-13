@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu as MenuIcon,
+  MessageSquare,
   RefreshCw,
   Users,
 } from "lucide-react";
@@ -33,13 +34,14 @@ const OVERVIEW: NavItem = { href: "/admin", title: "Tổng quan", icon: LayoutDa
 const SUBJECTS: NavItem = { href: "/admin/mon-hoc", title: "Môn học", icon: BookOpen };
 const MATERIALS: NavItem = { href: "/admin/tai-lieu", title: "Tài liệu", icon: FileChartColumn };
 const EXAMS: NavItem = { href: "/admin/de-thi", title: "Đề thi", icon: ClipboardList };
+const FEEDBACK: NavItem = { href: "/admin/phan-hoi", title: "Phản hồi", icon: MessageSquare };
 const USERS: NavItem = { href: "/admin/nguoi-dung", title: "Người dùng", icon: Users };
 const NAV: Array<{ label?: string; items: NavItem[] }> = [
   { items: [OVERVIEW] },
   { label: "Nội dung", items: [SUBJECTS, MATERIALS, EXAMS] },
-  { label: "Hệ thống", items: [USERS] },
+  { label: "Hệ thống", items: [FEEDBACK, USERS] },
 ];
-const ALL = [OVERVIEW, SUBJECTS, MATERIALS, EXAMS, USERS];
+const ALL = [OVERVIEW, SUBJECTS, MATERIALS, EXAMS, FEEDBACK, USERS];
 
 function isActive(pathname: string, href: string) {
   return href === "/admin" ? pathname === "/admin" : pathname === href || pathname.startsWith(`${href}/`);
@@ -105,7 +107,7 @@ function ProfileRow() {
   );
 }
 
-function SidebarInner({ pathname, pending }: { pathname: string; pending: number }) {
+function SidebarInner({ pathname, pending, feedback }: { pathname: string; pending: number; feedback: number }) {
   return (
     <>
       <div className="flex h-16 shrink-0 items-center gap-2.5 border-b border-line px-5">
@@ -121,14 +123,15 @@ function SidebarInner({ pathname, pending }: { pathname: string; pending: number
             <div className="flex flex-col gap-1">
               {group.items.map((item) => {
                 const active = isActive(pathname, item.href);
-                const count = item.href === EXAMS.href ? pending : 0;
+                const count = item.href === EXAMS.href ? pending : item.href === FEEDBACK.href ? feedback : 0;
+                const countLabel = item.href === FEEDBACK.href ? `${count} phản hồi mới` : `${count} đề chờ duyệt`;
                 const Icon = item.icon;
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
                     aria-current={active ? "page" : undefined}
-                    aria-label={count ? `${item.title}, ${count} đề chờ duyệt` : undefined}
+                    aria-label={count ? `${item.title}, ${countLabel}` : undefined}
                     className={cx(
                       "flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-sm outline-hidden transition-colors focus-visible:ring-2 focus-visible:ring-orange/30",
                       active ? "bg-orange-soft font-medium text-orange-dark" : "text-ink/70 hover:bg-paper-3 hover:text-ink",
@@ -137,7 +140,7 @@ function SidebarInner({ pathname, pending }: { pathname: string; pending: number
                     <Icon aria-hidden="true" className="size-4 shrink-0" />
                     <span className="min-w-0 flex-1 truncate">{item.title}</span>
                     {count > 0 && (
-                      <span className={cx("shrink-0 text-xs tabular-nums", active ? "text-orange-dark" : "text-ink-3")} title={`${count} đề chờ duyệt`}>
+                      <span className={cx("shrink-0 text-xs tabular-nums", active ? "text-orange-dark" : "text-ink-3")} title={countLabel}>
                         {count}
                       </span>
                     )}
@@ -172,6 +175,7 @@ function ShellFrame({ children }: { children: ReactNode }) {
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
   }, []);
+  const feedbackNew = overview?.feedbackNewCount ?? 0;
   const pending = overview ? overview.exams.filter((e) => e.status === "draft").length : 0;
   const detail = isExamDetail(pathname);
   const current = ALL.find((item) => isActive(pathname, item.href) && item.href !== "/admin") ?? (pathname === "/admin" ? OVERVIEW : null);
@@ -187,7 +191,7 @@ function ShellFrame({ children }: { children: ReactNode }) {
         className="sticky top-[env(safe-area-inset-top,0px)] hidden h-dvh w-64 shrink-0 flex-col bg-paper lg:flex"
         aria-label="Điều hướng quản trị"
       >
-        <SidebarInner pathname={pathname} pending={pending} />
+        <SidebarInner pathname={pathname} pending={pending} feedback={feedbackNew} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-[env(safe-area-inset-top,0px)] z-30 flex h-16 shrink-0 items-center gap-2 border-b border-line bg-paper px-4 sm:px-6">
@@ -217,7 +221,7 @@ function ShellFrame({ children }: { children: ReactNode }) {
         <main className="w-full max-w-[1600px] flex-1 p-4 pb-24 sm:p-6 sm:pb-24">{children}</main>
       </div>
       <Drawer open={drawerOpen} onClose={() => setDrawerOpen(false)}>
-        <SidebarInner pathname={pathname} pending={pending} />
+        <SidebarInner pathname={pathname} pending={pending} feedback={feedbackNew} />
       </Drawer>
     </div>
   );

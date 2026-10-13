@@ -34,7 +34,7 @@ try {
       assert.equal(response.status, 200, `${route} with ${cookie || "no cookie"} must not redirect`);
       assert.equal(response.headers.get("location"), null);
     }
-    for (const route of ["/admin", "/admin/mon-hoc", "/admin/tai-lieu", "/admin/de-thi", "/admin/nguoi-dung"]) {
+    for (const route of ["/admin", "/admin/mon-hoc", "/admin/tai-lieu", "/admin/de-thi", "/admin/phan-hoi", "/admin/nguoi-dung"]) {
       const response = await fetch(base + route, { headers: { cookie }, redirect: "manual" });
       assert.equal(response.status, 200, `${route} with ${cookie || "no cookie"} must render`);
       assert.equal(response.headers.get("location"), null);
