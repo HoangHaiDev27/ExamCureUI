@@ -314,19 +314,14 @@ export async function registerAPI(
   password: string,
   schoolId: string,
 ) {
-  await request("/Auth/register", {
+  // The backend signs the new user in immediately, exactly like a login.
+  const user = await authenticate("/Auth/register", {
     fullName: name,
     email,
     password,
     schoolId,
   });
-  return { success: true, user: null as AuthUser | null };
-}
-export function verifyOtpAPI(email: string, code: string) {
-  return authenticate("/Auth/verify-otp", { email, code });
-}
-export async function resendSignupOtpAPI(email: string) {
-  await request("/Auth/resend-otp", { email });
+  return { success: true, user };
 }
 export async function requestPasswordResetAPI(email: string) {
   await request("/Auth/forgot-password", { email });

@@ -248,17 +248,21 @@ describe("ExamcureBe browser authentication", () => {
     expect(auth.getAuth()).toMatchObject({ name: "Student", role: "student" });
     expect(await auth.getAccessToken()).toBe("backend-token");
   });
-  it("registers for OTP verification and never creates an active session prematurely", async () => {
+  it("registers and signs the new user in without another request", async () => {
     const auth = await import("../lib/auth");
-    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ success: true }));
-    expect(
-      (await auth.registerAPI("Student", profile.email, "password", "hust"))
-        .user,
-    ).toBeNull();
-    expect(auth.getAuth()).toBeNull();
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json({ ...profile, token: "register-token" }),
+    );
+    const result = await auth.registerAPI("Student", profile.email, "password", "hust");
+    expect(result.success).toBe(true);
+    expect(result.user).toMatchObject({ name: "Student" });
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/api/v1/Auth/register");
     expect(
       JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string),
-    ).toMatchObject({ fullName: "Student", schoolId: "hust" });
+    ).toEqual({ fullName: "Student", email: profile.email, password: "password", schoolId: "hust" });
+    expect(auth.getAuth()).toMatchObject({ name: "Student" });
+    expect(await auth.getAccessToken()).toBe("register-token");
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
   });
   it("never turns backend/network errors into successful logins", async () => {
     const auth = await import("../lib/auth");

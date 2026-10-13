@@ -8,7 +8,7 @@ import { Check } from "lucide-react";
 import { SocialAuth } from "./SocialAuth";
 import { Captcha } from "./Captcha";
 import { TextField, PasswordField, SubmitButton } from "./Fields";
-import { homeFor, login, registerAPI } from "@/lib/auth";
+import { homeFor, registerAPI } from "@/lib/auth";
 import { SCHOOLS } from "@/lib/schools";
 
 export function RegisterForm({
@@ -51,11 +51,8 @@ export function RegisterForm({
       setIsSubmitting(true);
       try {
         const result = await registerAPI(name, email, password, schoolId);
-        if (result.user) login(result.user);
         onSuccess?.();
-        router.push(result.user
-          ? homeFor(result.user.role, safeRedirect(redirectTo))
-          : `/xac-thuc-otp?email=${encodeURIComponent(email)}`);
+        router.push(homeFor(result.user.role, safeRedirect(redirectTo)));
       } catch (error) {
         const err = error as Error;
         setErrors({ ...er, email: err.message });

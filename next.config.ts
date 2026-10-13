@@ -24,6 +24,7 @@ const nextConfig: NextConfig = {
       to("/admin/cau-hoi", "/admin/de-thi"),
       to("/admin/hoc-phan", "/admin/mon-hoc"),
       to("/admin/truong", "/admin/mon-hoc"),
+      to("/xac-thuc-otp", "/"),
     ];
   },
   experimental: { proxyTimeout: 180000 },

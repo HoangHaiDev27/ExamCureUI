@@ -26,7 +26,10 @@ try {
   }
   assert.ok(ready, `Next server must start: ${output}`);
   for (const cookie of ["", "examcure_role=admin", "examcure_role=student"]) {
-    for (const route of ["/quen-mat-khau", "/xac-thuc-otp", "/pricing"]) {
+    const otp = await fetch(base + "/xac-thuc-otp", { headers: { cookie }, redirect: "manual" });
+    assert.equal(otp.status, 307, "/xac-thuc-otp must redirect temporarily");
+    assert.equal(new URL(otp.headers.get("location"), base).pathname, "/");
+    for (const route of ["/quen-mat-khau", "/pricing"]) {
       const response = await fetch(base + route, { headers: { cookie }, redirect: "manual" });
       assert.equal(response.status, 200, `${route} with ${cookie || "no cookie"} must not redirect`);
       assert.equal(response.headers.get("location"), null);
