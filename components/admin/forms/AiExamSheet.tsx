@@ -10,8 +10,8 @@ import { Button, Checkbox, Field, INPUT, Radio, TEXTAREA, cx } from "../ui";
 
 const DIFFICULTIES = Object.keys(DIFFICULTY_LABEL) as Difficulty[];
 
-function AiExamSheetInner({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { overview, reload } = useAdminData();
+function AiExamSheetInner({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
+  const { overview, reload, trackGenerating } = useAdminData();
   const { toast } = useToast();
   const router = useRouter();
   const subjects = useMemo(() => overview?.subjects ?? [], [overview]);
@@ -79,7 +79,7 @@ function AiExamSheetInner({ open, onClose }: { open: boolean; onClose: () => voi
     if (Object.keys(next).length || !subjectId) return;
     setBusy(true);
     try {
-      await generateExam({
+      const created = await generateExam({
         subjectId,
         title: titleValue,
         durationMinutes: durationNumber,
@@ -88,7 +88,9 @@ function AiExamSheetInner({ open, onClose }: { open: boolean; onClose: () => voi
         ...(extraValue ? { extraInstructions: extraValue } : {}),
         ...(hasMaterials ? { materialVersionIds: [...selected] } : {}),
       });
+      trackGenerating(created.examId);
       onClose();
+      onCreated?.();
       toast({ tone: "success", title: "AI đang soạn đề", detail: "Xong sẽ báo bạn" });
       router.push("/admin/de-thi");
       await reload();
@@ -224,12 +226,12 @@ function AiExamSheetInner({ open, onClose }: { open: boolean; onClose: () => voi
 }
 
 /** Remounts the form state every time the sheet is opened. */
-export function AiExamSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function AiExamSheet({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated?: () => void }) {
   const [session, setSession] = useState(0);
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) setSession((s) => s + 1);
   }
-  return <AiExamSheetInner key={session} open={open} onClose={onClose} />;
+  return <AiExamSheetInner key={session} open={open} onClose={onClose} {...(onCreated ? { onCreated } : {})} />;
 }

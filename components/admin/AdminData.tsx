@@ -137,6 +137,8 @@ export interface AdminDataValue {
   error: boolean;
   refreshing: boolean;
   reload: () => Promise<void>;
+  /** Registers a just-created exam as generating so the next reload announces its outcome. */
+  trackGenerating: (examId: string) => void;
 }
 
 const AdminDataContext = createContext<AdminDataValue | null>(null);
@@ -154,7 +156,7 @@ export function needsPolling(overview: AdminOverview | null): boolean {
   if (!overview) return false;
   if (overview.exams.some((e) => e.status === "generating")) return true;
   return overview.materials.some((m) =>
-    m.material_versions.some((v) => v.status === "uploading" || v.status === "uploaded" || v.status === "processing"),
+    m.material_versions.some((v) => v.status === "uploaded" || v.status === "processing"),
   );
 }
 
@@ -278,9 +280,13 @@ export function AdminDataProvider({ children }: { children: ReactNode }) {
     };
   }, [polling, fetchAll, apply]);
 
+  const trackGenerating = useCallback((examId: string) => {
+    if (known.current) known.current.set(examId, "generating");
+  }, []);
+
   const value = useMemo<AdminDataValue>(
-    () => ({ overview, services, loading, error: error && !overview, refreshing, reload }),
-    [overview, services, loading, error, refreshing, reload],
+    () => ({ overview, services, loading, error: error && !overview, refreshing, reload, trackGenerating }),
+    [overview, services, loading, error, refreshing, reload, trackGenerating],
   );
   return <AdminDataContext.Provider value={value}>{children}</AdminDataContext.Provider>;
 }

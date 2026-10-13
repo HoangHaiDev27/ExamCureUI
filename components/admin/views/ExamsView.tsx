@@ -36,13 +36,13 @@ function StatusCell({ exam }: { exam: ExamSummary }) {
 
 const countOf = (e: ExamSummary) => (e.status === "generating" ? e.requested_count : e.question_count);
 
-function ExamsTable({ onCreate }: { onCreate: () => void }) {
+function ExamsTable({ onCreate, tab, setTab }: { onCreate: () => void; tab: Tab; setTab: (tab: Tab) => void }) {
   const { services } = useAdminData();
   return (
     <ViewGate>
       {(overview) => {
         const { exams, subjects } = overview;
-        return <ExamsList exams={exams} subjectCodes={new Map(subjects.map((s) => [s.id, subjectCode(s)]))} hasSubjects={subjects.length > 0} openai={services?.openai !== false} onCreate={onCreate} />;
+        return <ExamsList exams={exams} subjectCodes={new Map(subjects.map((s) => [s.id, subjectCode(s)]))} hasSubjects={subjects.length > 0} openai={services?.openai !== false} onCreate={onCreate} tab={tab} setTab={setTab} />;
       }}
     </ViewGate>
   );
@@ -54,14 +54,17 @@ function ExamsList({
   hasSubjects,
   openai,
   onCreate,
+  tab,
+  setTab,
 }: {
   exams: ExamSummary[];
   subjectCodes: Map<string, string>;
   hasSubjects: boolean;
   openai: boolean;
   onCreate: () => void;
+  tab: Tab;
+  setTab: (tab: Tab) => void;
 }) {
-  const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
   const codeOf = (e: ExamSummary) => subjectCodes.get(e.subject_id) ?? "—";
   const tabs: Array<{ value: Tab; label: string; count: number }> = [
@@ -161,10 +164,11 @@ function ExamsList({
 
 export function ExamsView() {
   const [sheet, setSheet] = useState(false);
+  const [tab, setTab] = useState<Tab>("all");
   return (
     <>
-      <ExamsTable onCreate={() => setSheet(true)} />
-      <AiExamSheet open={sheet} onClose={() => setSheet(false)} />
+      <ExamsTable onCreate={() => setSheet(true)} tab={tab} setTab={setTab} />
+      <AiExamSheet open={sheet} onClose={() => setSheet(false)} onCreated={() => setTab("all")} />
     </>
   );
 }

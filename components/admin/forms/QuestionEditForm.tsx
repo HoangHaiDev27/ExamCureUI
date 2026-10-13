@@ -21,7 +21,8 @@ export function QuestionEditForm({
   question: AdminQuestion;
   index: number;
   onCancel: () => void;
-  onSave: (values: QuestionEditValues) => void;
+  /** Resolves true when saved (the parent then closes the form). */
+  onSave: (values: QuestionEditValues) => Promise<boolean> | boolean;
 }) {
   const uid = useId();
   const sorted = [...question.options].sort((a, b) => a.position - b.position);
@@ -30,14 +31,16 @@ export function QuestionEditForm({
   const [contents, setContents] = useState(() => [0, 1, 2, 3].map((p) => sorted.find((o) => o.position === p)?.content ?? ""));
   const [correct, setCorrect] = useState(() => sorted.find((o) => o.is_correct)?.position ?? 0);
   const [errors, setErrors] = useState<{ prompt?: string; options?: string; explanation?: string }>({});
+  const [busy, setBusy] = useState(false);
   const firstRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     firstRef.current?.focus({ preventScroll: true });
   }, []);
 
-  const submit = (event: FormEvent) => {
+  const submit = async (event: FormEvent) => {
     event.preventDefault();
+    if (busy) return;
     const p = prompt.trim();
     const e = explanation.trim();
     const trimmed = contents.map((c) => c.trim());
@@ -49,15 +52,20 @@ export function QuestionEditForm({
     };
     setErrors(next);
     if (Object.keys(next).length) return;
-    onSave({
-      prompt: p,
-      explanation: e,
-      options: trimmed.map((content, position) => ({ position, content, isCorrect: position === correct })),
-    });
+    setBusy(true);
+    try {
+      await onSave({
+        prompt: p,
+        explanation: e,
+        options: trimmed.map((content, position) => ({ position, content, isCorrect: position === correct })),
+      });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-5" noValidate>
+    <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-5" noValidate>
       <p className="text-xs font-medium text-ink-3">Sửa câu {index + 1}</p>
       <div>
         <label htmlFor={`${uid}-prompt`} className="block text-sm font-medium">Câu hỏi</label>
@@ -114,7 +122,7 @@ export function QuestionEditForm({
       </div>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button variant="secondary" onClick={onCancel} className="min-h-11 md:min-h-10">Huỷ</Button>
-        <Button variant="primary" type="submit" className="min-h-11 md:min-h-10">Lưu câu hỏi</Button>
+        <Button variant="primary" type="submit" busy={busy} className="min-h-11 md:min-h-10">Lưu câu hỏi</Button>
       </div>
     </form>
   );

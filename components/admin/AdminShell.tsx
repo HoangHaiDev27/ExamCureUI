@@ -163,6 +163,14 @@ function ShellFrame({ children }: { children: ReactNode }) {
     setDrawerPath(pathname);
     setDrawerOpen(false);
   }
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const onChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setDrawerOpen(false);
+    };
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
   const pending = overview ? overview.exams.filter((e) => e.status === "draft").length : 0;
   const detail = isExamDetail(pathname);
   const current = ALL.find((item) => isActive(pathname, item.href) && item.href !== "/admin") ?? (pathname === "/admin" ? OVERVIEW : null);

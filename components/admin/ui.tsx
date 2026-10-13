@@ -394,33 +394,49 @@ export function ErrorBlock({ onRetry }: { onRetry: () => void }) {
 }
 
 /* ---------- Pager ---------- */
+function pageItems(page: number, pages: number): Array<number | "gap-start" | "gap-end"> {
+  const wanted = [...new Set([1, pages, page - 1, page, page + 1].filter((n) => n >= 1 && n <= pages))].sort((x, y) => x - y);
+  const items: Array<number | "gap-start" | "gap-end"> = [];
+  wanted.forEach((n, i) => {
+    const prev = wanted[i - 1];
+    if (prev !== undefined && n - prev > 1) items.push(i === 1 ? "gap-start" : "gap-end");
+    items.push(n);
+  });
+  return items;
+}
+
 export function Pager({ page, pageSize, total, noun, onPage }: { page: number; pageSize: number; total: number; noun: string; onPage: (page: number) => void }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
   return (
-    <div className="flex items-center justify-between gap-4 border-t border-line px-4 py-3">
-      <p className="text-sm tabular-nums text-ink-3">
+    <div className="flex items-center justify-between gap-3 border-t border-line px-4 py-3">
+      <p className="min-w-0 text-sm tabular-nums text-ink-3">
         <span className="hidden sm:inline">{from} tới {to} trong </span>
         {nf.format(total)} {noun}
       </p>
       {pages > 1 && (
-        <nav aria-label="Phân trang" className="flex shrink-0 items-center gap-1">
+        <nav aria-label="Phân trang" className="flex max-w-full shrink-0 items-center gap-1">
           <IconButton icon={ChevronLeft} label="Trang trước" className="size-9" disabled={page === 1} onClick={() => onPage(page - 1)} />
-          {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
-            <button
-              key={n}
-              type="button"
-              aria-current={n === page ? "page" : undefined}
-              onClick={() => onPage(n)}
-              className={cx(
-                "inline-flex h-9 min-w-9 cursor-pointer items-center justify-center rounded-lg border px-2 text-sm font-medium tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-orange/30",
-                n === page ? "border-transparent bg-paper-3 text-ink" : "border-transparent text-ink/70 hover:bg-ink/5 hover:text-ink",
-              )}
-            >
-              {n}
-            </button>
-          ))}
+          <span className="px-1 text-sm tabular-nums text-ink-3 sm:hidden" aria-current="page">Trang {page} / {pages}</span>
+          {pageItems(page, pages).map((item) =>
+            typeof item === "string" ? (
+              <span key={item} aria-hidden="true" className="hidden h-9 min-w-6 items-center justify-center text-sm text-ink-3 sm:inline-flex">…</span>
+            ) : (
+              <button
+                key={item}
+                type="button"
+                aria-current={item === page ? "page" : undefined}
+                onClick={() => onPage(item)}
+                className={cx(
+                  "hidden h-9 min-w-9 cursor-pointer items-center justify-center rounded-lg border px-2 text-sm font-medium tabular-nums outline-hidden focus-visible:ring-2 focus-visible:ring-orange/30 sm:inline-flex",
+                  item === page ? "border-transparent bg-paper-3 text-ink" : "border-transparent text-ink/70 hover:bg-ink/5 hover:text-ink",
+                )}
+              >
+                {item}
+              </button>
+            ),
+          )}
           <IconButton icon={ChevronRight} label="Trang sau" className="size-9" disabled={page === pages} onClick={() => onPage(page + 1)} />
         </nav>
       )}

@@ -14,7 +14,6 @@ import {
   subjectCode,
   type AdminExamDetail,
   type AdminQuestion,
-  type ReviewQuestionBody,
 } from "@/lib/admin";
 import { ApiError } from "@/lib/api";
 import { QuestionEditForm, type QuestionEditValues } from "../forms/QuestionEditForm";
@@ -80,7 +79,7 @@ function SourcesBlock({ question }: { question: AdminQuestion }) {
 }
 
 export function ExamDetailView({ examId }: { examId: string }) {
-  const { overview, reload } = useAdminData();
+  const { overview, error: overviewError, reload } = useAdminData();
   const { toast } = useToast();
   const router = useRouter();
   const [detail, setDetail] = useState<AdminExamDetail | null>(null);
@@ -152,6 +151,7 @@ export function ExamDetailView({ examId }: { examId: string }) {
       </div>
     );
   if (failed && !detail) return <ErrorBlock onRetry={() => { setFailed(false); setKey((k) => k + 1); }} />;
+  if (overviewError && !overview) return <ErrorBlock onRetry={() => void reload()} />;
   if (!detail || !overview) return <SkeletonView kind="table" />;
 
   const { exam, questions } = detail;
@@ -163,31 +163,38 @@ export function ExamDetailView({ examId }: { examId: string }) {
   const created = formatAdminDate(exam.created_at).replace("Hôm nay", "hôm nay").replace("Hôm qua", "hôm qua");
 
   const sortByPosition = (list: AdminQuestion[]) => [...list].sort((a, b) => a.position - b.position);
-  const review = async (snapshot: AdminExamDetail, next: AdminExamDetail, id: string, body: ReviewQuestionBody) => {
-    setDetail(next);
+  const errorDetail = (reason: unknown) => (reason instanceof Error ? reason.message : "Vui lòng thử lại.");
+  /** Applies a change to one question only, so concurrent changes to other questions are never undone. */
+  const updateQuestion = (id: string, change: (q: AdminQuestion) => AdminQuestion | null) =>
+    setDetail((d) =>
+      d
+        ? { ...d, questions: d.questions.flatMap((q) => (q.id === id ? (change(q) ? [change(q) as AdminQuestion] : []) : [q])) }
+        : d,
+    );
+  const restoreQuestion = (q: AdminQuestion) =>
+    setDetail((d) => (d && !d.questions.some((x) => x.id === q.id) ? { ...d, questions: sortByPosition([...d.questions, q]) } : d));
+
+  const toggleChecked = async (q: AdminQuestion) => {
+    const status = q.status === "approved" ? "draft" : "approved";
+    updateQuestion(q.id, (x) => ({ ...x, status }));
     try {
-      await reviewQuestion(id, body);
+      await reviewQuestion(q.id, { status });
       void reload();
-      return true;
     } catch (reason) {
-      setDetail(snapshot);
-      toast({ tone: "error", title: "Không cập nhật được câu hỏi", detail: reason instanceof Error ? reason.message : "Vui lòng thử lại." });
-      return false;
+      updateQuestion(q.id, (x) => ({ ...x, status: q.status }));
+      toast({ tone: "error", title: "Không cập nhật được câu hỏi", detail: errorDetail(reason) });
     }
   };
-  const mapQuestion = (id: string, change: Partial<AdminQuestion>): AdminExamDetail => ({
-    ...detail,
-    questions: questions.map((q) => (q.id === id ? { ...q, ...change } : q)),
-  });
-
-  const toggleChecked = (q: AdminQuestion) => {
-    const status = q.status === "approved" ? "draft" : "approved";
-    void review(detail, mapQuestion(q.id, { status }), q.id, { status });
-  };
   const remove = async (q: AdminQuestion, index: number) => {
-    const snapshot = detail;
-    const ok = await review(snapshot, { ...detail, questions: questions.filter((x) => x.id !== q.id) }, q.id, { status: "rejected" });
-    if (!ok) return;
+    updateQuestion(q.id, () => null);
+    try {
+      await reviewQuestion(q.id, { status: "rejected" });
+      void reload();
+    } catch (reason) {
+      restoreQuestion(q);
+      toast({ tone: "error", title: "Không cập nhật được câu hỏi", detail: errorDetail(reason) });
+      return;
+    }
     toast({
       tone: "success",
       title: `Đã bỏ câu ${index + 1} khỏi đề`,
@@ -196,10 +203,10 @@ export function ExamDetailView({ examId }: { examId: string }) {
         onClick: () => {
           void reviewQuestion(q.id, { status: q.status })
             .then(() => {
-              setDetail((current) => (current && !current.questions.some((x) => x.id === q.id) ? { ...current, questions: sortByPosition([...current.questions, q]) } : current));
+              restoreQuestion(q);
               void reload();
             })
-            .catch((reason: unknown) => toast({ tone: "error", title: "Không hoàn tác được", detail: reason instanceof Error ? reason.message : "Vui lòng thử lại." }));
+            .catch((reason: unknown) => toast({ tone: "error", title: "Không hoàn tác được", detail: errorDetail(reason) }));
         },
       },
     });
@@ -208,19 +215,26 @@ export function ExamDetailView({ examId }: { examId: string }) {
     setEditing(null);
     requestAnimationFrame(() => document.getElementById(`edit-${id}`)?.focus({ preventScroll: true }));
   };
-  const saveEdit = async (q: AdminQuestion, values: QuestionEditValues) => {
-    const next = mapQuestion(q.id, {
+  /** The form stays open with the typed values until the server accepts the change. */
+  const saveEdit = async (q: AdminQuestion, values: QuestionEditValues): Promise<boolean> => {
+    try {
+      await reviewQuestion(q.id, { status: "approved", prompt: values.prompt, explanation: values.explanation, options: values.options });
+    } catch (reason) {
+      toast({ tone: "error", title: "Không lưu được câu hỏi", detail: errorDetail(reason) });
+      return false;
+    }
+    updateQuestion(q.id, (x) => ({
+      ...x,
       status: "approved",
       prompt: values.prompt,
       explanation: values.explanation,
       options: values.options.map((o) => ({ position: o.position, content: o.content, is_correct: o.isCorrect })),
-    });
+    }));
     setEditing(null);
-    const ok = await review(detail, next, q.id, { status: "approved", prompt: values.prompt, explanation: values.explanation, options: values.options });
-    if (ok) {
-      toast({ tone: "success", title: "Đã lưu câu hỏi", detail: "Câu đã sửa được tính là đã kiểm" });
-      requestAnimationFrame(() => document.getElementById(`q-${q.id}`)?.scrollIntoView({ block: "nearest" }));
-    } else setEditing(q.id);
+    void reload();
+    toast({ tone: "success", title: "Đã lưu câu hỏi", detail: "Câu đã sửa được tính là đã kiểm" });
+    requestAnimationFrame(() => document.getElementById(`q-${q.id}`)?.scrollIntoView({ block: "nearest" }));
+    return true;
   };
 
   const confirmPublish = async () => {
@@ -359,7 +373,7 @@ export function ExamDetailView({ examId }: { examId: string }) {
                 if (isDraft && editing === q.id)
                   return (
                     <li key={q.id} id={`q-${q.id}`} className="scroll-mt-24 bg-paper-2 p-4 sm:p-5">
-                      <QuestionEditForm question={q} index={index} onCancel={() => cancelEdit(q.id)} onSave={(values) => void saveEdit(q, values)} />
+                      <QuestionEditForm question={q} index={index} onCancel={() => cancelEdit(q.id)} onSave={(values) => saveEdit(q, values)} />
                     </li>
                   );
                 const isChecked = q.status === "approved";
@@ -383,9 +397,9 @@ export function ExamDetailView({ examId }: { examId: string }) {
                               <Button variant="ghost" icon={X} aria-label={`Bỏ câu ${index + 1} khỏi đề`} onClick={() => void remove(q, index)}>Bỏ câu</Button>
                               <Button variant="outline" icon={Pencil} id={`edit-${q.id}`} aria-label={`Sửa câu ${index + 1}`} onClick={() => setEditing(q.id)}>Sửa</Button>
                               {isChecked ? (
-                                <Button variant="ghost" aria-label={`Bỏ đánh dấu đã kiểm câu ${index + 1}`} onClick={() => toggleChecked(q)}>Bỏ đánh dấu</Button>
+                                <Button variant="ghost" aria-label={`Bỏ đánh dấu đã kiểm câu ${index + 1}`} onClick={() => void toggleChecked(q)}>Bỏ đánh dấu</Button>
                               ) : (
-                                <Button variant="secondary" icon={Check} aria-label={`Đánh dấu đã kiểm câu ${index + 1}`} onClick={() => toggleChecked(q)}>Đã kiểm</Button>
+                                <Button variant="secondary" icon={Check} aria-label={`Đánh dấu đã kiểm câu ${index + 1}`} onClick={() => void toggleChecked(q)}>Đã kiểm</Button>
                               )}
                             </div>
                           )}
