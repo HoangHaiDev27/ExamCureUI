@@ -5,6 +5,7 @@ import { useState, type ReactNode } from "react";
 import { Logo } from "@/components/Logo";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
 import { useAuth, useAuthReady } from "@/lib/auth";
+import { latchDecision } from "@/lib/auth-latch";
 import type { AuthUser } from "@/lib/auth";
 
 export function StatusCard({
@@ -75,10 +76,21 @@ export function RequireUser({
   const ready = useAuthReady();
   const { openAuth } = useAuthModal();
   const [kept, setKept] = useState<AuthUser | null>(null);
-  if (latch && user && kept?.id !== user.id) setKept(user);
-  const active = user ?? (latch ? kept : null);
-  if (active) return <>{children(active)}</>;
-  if (!ready) return <LoadingCard label="Đang tải…" />;
+  const decision = latch ? latchDecision(kept, user, ready) : user ? "keep" : ready ? "signed-out" : "loading";
+  if (decision === "adopt" && user) setKept(user);
+  if (decision === "account-changed")
+    return (
+      <StatusCard
+        tone="danger"
+        title="Tài khoản đã thay đổi"
+        actions={<button type="button" onClick={() => window.location.reload()} className={primaryAction}>Tải lại trang</button>}
+      >
+        Bạn đã đăng nhập bằng tài khoản khác. Bài làm dở của tài khoản trước vẫn được lưu tạm trên trình duyệt này — đăng nhập lại bằng tài khoản đó để tiếp tục, hoặc tải lại trang để bắt đầu với tài khoản hiện tại.
+      </StatusCard>
+    );
+  const active = latch ? (decision === "adopt" ? user : (kept ?? user)) : user;
+  if (decision === "loading") return <LoadingCard label="Đang tải…" />;
+  if (decision !== "signed-out" && active) return <>{children(active)}</>;
   return (
     <StatusCard
       title="Đăng nhập để tiếp tục"

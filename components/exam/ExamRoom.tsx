@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -24,7 +24,8 @@ import { SchoolMark } from "@/components/SchoolMark";
 import { examCodeFor } from "@/lib/student";
 import { ApiError } from "@/lib/api";
 import { useAuthModal } from "@/components/auth/AuthModalProvider";
-import { clearDraft, loadDraft, newDraft, remainingSec, saveDraft } from "@/lib/exam-draft";
+import { clearDraft, loadDraft, newStored, remainingSec, restoreState, saveDraft, snapshotState } from "@/lib/exam-draft";
+import { getAuth } from "@/lib/auth";
 
 const LETTERS = ["A", "B", "C", "D"];
 
@@ -74,15 +75,17 @@ export function ExamRoom({
   const durationSec = exam.durationMinutes * 60;
   const routeId = subjectRouteId(school.id, subject.code);
 
-  // Restore an unsubmitted draft (same user + exam) so a remount or reload keeps answers and the real deadline.
-  const [draft] = useState(
-    () => loadDraft(student.id, exam.id, total) ?? newDraft(total, Date.now(), crypto.randomUUID()),
-  );
+  const questionIds = useMemo(() => questions.map((q) => q.id), [questions]);
+  const [draft] = useState(() => {
+    const stored = loadDraft(student.id, exam.id) ?? newStored(Date.now(), crypto.randomUUID());
+    return { stored, ...restoreState(stored, questionIds, positions) };
+  });
   const [answers, setAnswers] = useState<number[]>(draft.answers);
   const [flagged, setFlagged] = useState<boolean[]>(draft.flagged);
   const [current, setCurrent] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(() => remainingSec(draft.startedAt, durationSec, Date.now()));
+  const [timeLeft, setTimeLeft] = useState(() => remainingSec(draft.stored.startedAt, durationSec, Date.now()));
   const [authExpired, setAuthExpired] = useState(false);
+  const [accountChanged, setAccountChanged] = useState(false);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
@@ -98,16 +101,17 @@ export function ExamRoom({
   const danger = timeLeft <= 300;
 
   useEffect(() => {
-    saveDraft(student.id, exam.id, {
-      answers,
-      flagged,
-      startedAt: draft.startedAt,
-      clientAttemptId: draft.clientAttemptId,
-    });
-  }, [answers, flagged, student.id, exam.id, draft]);
+    saveDraft(student.id, exam.id, snapshotState(draft.stored, questionIds, positions, answers, flagged));
+  }, [answers, flagged, student.id, exam.id, draft, questionIds, positions]);
 
   const finish = useCallback(async () => {
     if (submittedRef.current) return;
+    // Never submit another account's answers if the signed-in user changed under us.
+    const signedIn = getAuth();
+    if (signedIn && signedIn.id !== student.id) {
+      setAccountChanged(true);
+      return;
+    }
     submittedRef.current = true;
     setSubmitting(true);
     setSubmitError(null);
@@ -115,7 +119,7 @@ export function ExamRoom({
     try {
       const result = await submitAttempt(exam.id, {
         ...buildSubmitPayload(questions, positions, answers, durationSec - timeLeft),
-        clientAttemptId: draft.clientAttemptId,
+        clientAttemptId: draft.stored.clientAttemptId,
       });
       clearDraft(student.id, exam.id);
       setAttemptId(result.attemptId);
@@ -139,10 +143,10 @@ export function ExamRoom({
   // Countdown
   useEffect(() => {
     const id = setInterval(() => {
-      setTimeLeft(remainingSec(draft.startedAt, durationSec, Date.now()));
+      setTimeLeft(remainingSec(draft.stored.startedAt, durationSec, Date.now()));
     }, 1000);
     return () => clearInterval(id);
-  }, [draft.startedAt, durationSec]);
+  }, [draft.stored.startedAt, durationSec]);
 
   // Auto-submit when time runs out
   useEffect(() => {
@@ -195,6 +199,17 @@ export function ExamRoom({
   }, [current, go, submitOpen, questions]);
 
   const q = questions[current];
+
+  if (accountChanged)
+    return (
+      <div className="grid min-h-[100dvh] place-items-center bg-paper-2 p-6">
+        <div role="alert" className="w-full max-w-sm rounded-[14px] border border-line bg-paper p-8 text-center">
+          <h1 className="font-display text-[20px] font-semibold text-danger">Tài khoản đã thay đổi</h1>
+          <p className="mt-2 text-[14px] text-ink-2">Bạn đã đăng nhập bằng tài khoản khác. Bài làm dở của tài khoản trước vẫn được lưu tạm trên trình duyệt này — đăng nhập lại bằng tài khoản đó để tiếp tục, hoặc tải lại trang để bắt đầu với tài khoản hiện tại.</p>
+          <button type="button" onClick={() => window.location.reload()} className="mt-5 inline-flex h-10 items-center rounded-[7px] bg-orange px-5 text-[13.5px] font-semibold text-white">Tải lại trang</button>
+        </div>
+      </div>
+    );
 
   if (isLocked) {
     return (
@@ -472,8 +487,10 @@ export function ExamRoom({
         timeLeft={timeLeft}
         danger={danger}
         onExit={() => {
-          if (confirm("Thoát khỏi phòng thi? Bài làm hiện tại sẽ không được lưu."))
+          if (confirm("Thoát khỏi phòng thi? Bài làm hiện tại sẽ không được lưu.")) {
+            clearDraft(student.id, exam.id);
             router.push("/dashboard");
+          }
         }}
       />
 

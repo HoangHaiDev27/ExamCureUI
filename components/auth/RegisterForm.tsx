@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { safeRedirect } from "@/lib/redirect";
 import { useRouter } from "next/navigation";
 import { Check } from "lucide-react";
 import { SocialAuth } from "./SocialAuth";
@@ -53,7 +54,7 @@ export function RegisterForm({
         if (result.user) login(result.user);
         onSuccess?.();
         router.push(result.user
-          ? homeFor(result.user.role, redirectTo ?? "/dashboard")
+          ? homeFor(result.user.role, safeRedirect(redirectTo))
           : `/xac-thuc-otp?email=${encodeURIComponent(email)}`);
       } catch (error) {
         const err = error as Error;

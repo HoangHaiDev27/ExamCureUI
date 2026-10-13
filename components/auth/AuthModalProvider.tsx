@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { safeRedirect } from "@/lib/redirect";
 import { LandingLoginModal } from "@/components/landing/LandingLoginModal";
 
 export type AuthModalMode = "login" | "register";
@@ -25,7 +26,7 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
 
   const openAuth = useCallback((nextMode: AuthModalMode = "login", target?: string) => {
     setMode(nextMode);
-    setRedirectTo(target);
+    setRedirectTo(target === undefined ? undefined : safeRedirect(target));
     setOpen(true);
   }, []);
 
