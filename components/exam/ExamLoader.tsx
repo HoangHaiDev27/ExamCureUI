@@ -57,7 +57,7 @@ function SubjectStage({ school, routeId, examId, student }: { school: School; ro
       />
     );
   return examId
-    ? <ExamStage key={examId} school={school} subject={res.data} examId={examId} student={student} />
+    ? <ExamStage key={`${student.id}:${examId}`} school={school} subject={res.data} examId={examId} student={student} />
     : <ExamListStage school={school} subject={res.data} student={student} />;
 }
 
@@ -75,7 +75,7 @@ function ExamListStage({ school, subject, student }: { school: School; subject: 
         actions={<Link href="/dashboard?tab=de-thi" className={primaryAction}>Xem đề thi khác</Link>}
       />
     );
-  if (exams.length === 1) return <ExamStage key={exams[0]!.id} school={school} subject={subject} examId={exams[0]!.id} student={student} />;
+  if (exams.length === 1) return <ExamStage key={`${student.id}:${exams[0]!.id}`} school={school} subject={subject} examId={exams[0]!.id} student={student} />;
   return (
     <div className="min-h-[100dvh] bg-paper-2 px-5 py-10">
       <div className="mx-auto max-w-xl">
@@ -141,7 +141,7 @@ function ExamStage({ school, subject, examId, student }: { school: School; subje
   const { exam } = res.data;
   return (
     <ExamRoom
-      key={exam.id}
+      key={`${student.id}:${exam.id}`}
       student={student}
       school={school}
       subject={{ id: subject.id, code: subject.code, name: subject.name }}

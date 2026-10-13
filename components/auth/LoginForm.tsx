@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { safeRedirect } from "@/lib/redirect";
 import { useRouter } from "next/navigation";
 import { SocialAuth } from "./SocialAuth";
 import { Captcha } from "./Captcha";
@@ -49,7 +50,7 @@ export function LoginForm({
           schoolId: data.schoolId || "fptu",
         });
         onSuccess?.();
-        router.push(homeFor(data.role, redirectTo ?? "/"));
+        router.push(homeFor(data.role, safeRedirect(redirectTo, "/")));
       } catch (error) {
         const err = error as Error;
         setErrors({ ...er, password: err.message });
