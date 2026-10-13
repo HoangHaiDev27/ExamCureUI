@@ -16,7 +16,7 @@ export async function apiRequest<T>(
     if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
     if (typeof init.body === "string" && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
     try {
-      return await fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+      return await fetch(`${API_BASE_URL}${path}`, { ...init, credentials: "include", cache: "no-store", headers });
     } catch (error) {
       if (init.signal?.aborted) throw error;
       throw new ApiError(0, "Không kết nối được máy chủ. Vui lòng thử lại.");

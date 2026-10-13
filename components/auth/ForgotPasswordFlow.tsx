@@ -141,7 +141,7 @@ export function ForgotPasswordFlow() {
         </h1>
         <p className="mx-auto mt-2 max-w-sm text-[14.5px] leading-relaxed text-ink-2">
           Chúng tôi đã gửi mã đặt lại mật khẩu tới{" "}
-          <span className="font-medium text-ink">{email}</span>. Mã có hiệu lực trong 15 phút.
+          <span className="font-medium text-ink">{email}</span>. Vui lòng sử dụng mã trước khi hết hạn.
         </p>
 
         <button

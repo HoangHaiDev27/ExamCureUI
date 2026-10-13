@@ -14,53 +14,32 @@ npm run dev      # http://localhost:3000
 npm run build    # bản production
 ```
 
-Backend AI nằm trong repo `ExamcureBe`: Supabase là cơ sở dữ liệu chính và
-MongoDB Atlas là Vector DB. Repo frontend này chỉ giữ Supabase anon key và gọi
-API qua `NEXT_PUBLIC_API_URL`. Trang quản trị nội dung ở `/admin`.
+ExamcureBe quản lý auth, quyền admin, tài liệu, câu hỏi và đề. Production dùng
+MongoDB lưu toàn bộ dữ liệu ứng dụng và vector; S3 lưu file private. FE không còn SDK/key
+Supabase.
 
-## Kết nối Supabase và Render
+## Kết nối ExamcureBe
 
-Frontend chỉ đăng nhập bằng Supabase Auth (email/mật khẩu, OTP và Google).
-API Node.js trên Render nhận access token Supabase và kiểm tra user/quyền;
-frontend không gọi `/Auth/*` cũ và không đăng nhập giả khi mất mạng.
+Sao chép `.env.example` thành `.env.local`. Browser gọi `/api/v1`; biến server
+`EXAMCURE_API_URL` là origin của BE (local `http://localhost:5010`). Next.js
+chuyển tiếp API để refresh cookie HttpOnly thuộc domain FE. Access token ở bộ
+nhớ; localStorage chỉ lưu profile hiển thị sau khi BE xác minh.
 
-1. Điền `NEXT_PUBLIC_SUPABASE_URL` và `NEXT_PUBLIC_SUPABASE_ANON_KEY` trong
-   `.env.local`; dùng cùng project với `SUPABASE_URL` của backend. Chỉ đưa
-   anon/publishable key vào frontend; service-role key chỉ nằm ở backend.
-2. Đặt `NEXT_PUBLIC_API_URL=https://<your-render-service>.onrender.com/api/v1`
-   khi dùng Render, hoặc `http://localhost:5010/api/v1` khi chạy local.
-3. Backend đặt `ENABLE_LEGACY_AUTH=false`, cấu hình service-role key và
-   `CORS_ORIGIN` bằng đúng origin frontend. Áp dụng migration Supabase trong
-   `ExamcureBe/supabase/migrations` để có bảng `profiles` và chính sách RLS.
-4. Trong Supabase Auth, bật Google provider và cho phép URL frontend thực tế
-   trong danh sách redirect URL. Luồng nhập OTP cần email template gửi
-   `{{ .Token }}` thay vì chỉ gửi link xác thực.
-5. Chạy `npm run check:config` để đối chiếu hai file môi trường local. Lệnh
-   này không in key và không kiểm tra biến môi trường trên Render.
-6. Khởi động lại frontend sau khi đổi `.env.local`; với bản deploy cần build
-   lại vì các biến `NEXT_PUBLIC_*` được đưa vào bundle lúc build.
+BE đặt CORS_ORIGIN đúng origin FE và API_PUBLIC_URL là URL API public qua FE.
+Google tùy chọn: cấu hình ba biến OAuth trong BE và callback đi qua FE tại
+`/api/v1/Auth/google/callback`, rồi bật NEXT_PUBLIC_GOOGLE_AUTH_ENABLED ở FE.
+Rebuild FE khi đổi môi trường. Xem hướng dẫn tại repo ExamcureBe:
+`docs/AI_BACKEND_SETUP.md` và `docs/REMOVE_SUPABASE.md`.
 
-Supabase SDK quản lý refresh token. Mỗi request backend lấy phiên từ SDK;
-401 được thử lại một lần bằng token mới; 403 đọc lại hồ sơ/quyền nhưng không
-đăng xuất session Supabase. Quyền cũng được đọc lại khi đổi trang, quay lại tab,
-kết nối lại mạng và mỗi 30 giây khi tab đang hiển thị.
-Đăng xuất chờ SDK xóa phiên trước khi chuyển trang.
+Admin chờ `/Users/me` kiểm tra role; API luôn đọc quyền hiện tại từ MongoDB. 401
+thử refresh một lần, 403 đọc lại role. Profile cập nhật khi chuyển trang,
+focus/online và mỗi 30 giây khi tab hiện. Chỉ landing dashboard của admin chuyển
+về admin; trang public/reset vẫn mở. Setup admin dùng session đã xác thực và
+setup secret có hạn của BE, mã không lưu trong browser.
 
-`/admin` và các bookmark admin cũ chuyển tới `/admin/noi-dung-ai`, nơi dùng
-đúng API quản lý người dùng, môn học, tài liệu, câu hỏi và đề của backend.
-Cookie role cũ không còn quyết định điều hướng. Admin vẫn mở được trang công
-khai/khôi phục mật khẩu; chỉ landing `/dashboard` của admin chuyển về `/admin`.
-Guard chờ kiểm tra hồ sơ trước khi mở giao diện quản trị. Để khởi tạo admin đầu
-tiên, đăng nhập tài khoản Supabase rồi dùng biểu mẫu khởi tạo tại `/admin`;
-backend phải áp dụng migration bootstrap và đặt mã có hạn dùng theo hướng dẫn
-`ExamcureBe/docs/AI_BACKEND_SETUP.md`. Mã không lưu trong local/sessionStorage và không thay
-thế access token Supabase.
-Quản lý trường và bài thi đã nộp của giao diện cũ chưa có API tương ứng trong
-backend này; không còn hiển thị các biểu mẫu gọi endpoint không tồn tại.
-
-Kiểm tra frontend: `npm test`, `npm run lint`, `npm run build`.
-Sau build, chạy `npm run test:admin-routes` để kiểm tra điều hướng production
-với cookie role cũ và xác nhận HTML admin chờ kiểm tra quyền.
+Kiểm tra: npm run check:config, npm test, npm run lint, npm run build và
+npm run test:admin-routes. Config check chỉ kiểm tra biến local, không kiểm tra
+kết nối dịch vụ production. Proxy/hosting cần cho phép upload 20 MB.
 
 Stack: **Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS v4 ·
 lucide-react**. Font: **Be Vietnam Pro** (UI), **Lora** (display), **JetBrains
@@ -106,9 +85,9 @@ lib/
   student.ts         # thí sinh demo, MSSV, mã đề
 ```
 
-> Dữ liệu demo của phòng thi hiện vẫn được sinh cục bộ. Auth Supabase và giao
+> Dữ liệu demo của phòng thi hiện vẫn được sinh cục bộ. Auth ExamcureBe và giao
 > diện quản trị đã được nối tới API backend; tài liệu, pipeline AI, ngân hàng
-> câu hỏi và đề hoạt động khi backend được cấu hình Supabase/MongoDB/OpenAI.
+> câu hỏi và đề hoạt động khi backend được cấu hình MongoDB replica set/S3/OpenAI.
 
 Sản phẩm mô phỏng phục vụ mục đích luyện tập — không liên kết chính thức với các
 trường; tên & nhận diện chỉ dùng để mô phỏng giao diện thi.

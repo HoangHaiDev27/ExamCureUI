@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { signInWithGoogle } from "@/lib/auth";
-import { isSupabaseBrowserConfigured } from "@/lib/supabase-browser";
 
 export function SocialAuth({ verb = "Đăng nhập", redirectTo }: {
   verb?: string;
@@ -10,7 +9,7 @@ export function SocialAuth({ verb = "Đăng nhập", redirectTo }: {
   onSuccess?: () => void;
 }) {
   const [error, setError] = useState("");
-  const configured = isSupabaseBrowserConfigured();
+  const configured = process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true";
   const handleGoogle = async () => {
     try {
       setError("");

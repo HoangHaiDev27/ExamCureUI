@@ -9,10 +9,10 @@
     "lint": "eslint",
     "test": "vitest run tests",
     "test:admin-routes": "node scripts/smoke-admin-routes.mjs",
+    "test:backend-session": "node scripts/smoke-backend-session.mjs",
     "check:config": "node scripts/check-config.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.112.4",
     "lucide-react": "^1.20.0",
     "next": "^16.3.4",
     "react": "19.2.4",

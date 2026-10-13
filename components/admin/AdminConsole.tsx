@@ -18,12 +18,12 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { API_BASE_URL, logout, useAuth } from "@/lib/auth";
-import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { apiRequest } from "@/lib/api";
 import { UsersPanel } from "./UsersPanel";
 
 type ServiceStatus = {
-  supabase: boolean;
+  database: boolean;
+  storage: boolean;
   mongodb: boolean;
   openai: boolean;
   converter: boolean;
@@ -126,7 +126,7 @@ export function AdminConsole() {
       const data = await api<Overview>("/Admin/overview");
       const keys = ["subjects", "materials", "questions", "exams"] as const;
       if (!keys.every((k) => Array.isArray(data?.[k]))) {
-        throw new Error(`Máy chủ ${API_BASE_URL} chưa hỗ trợ quản trị nội dung AI (cần BE Supabase).`);
+        throw new Error(`Máy chủ ${API_BASE_URL} chưa hỗ trợ quản trị nội dung AI (cần ExamcureBe mới).`);
       }
       setOverview(data);
     } catch (error) {
@@ -207,9 +207,7 @@ export function AdminConsole() {
       const mimeType = file.type || "application/octet-stream";
       const signed = await api<{
         versionId: string;
-        bucket: string;
-        path: string;
-        token: string;
+        uploadPath: string;
       }>("/Admin/materials", {
         method: "POST",
         body: JSON.stringify({
@@ -222,16 +220,10 @@ export function AdminConsole() {
         }),
       });
 
-      const { error } = await getSupabaseBrowserClient().storage
-        .from(signed.bucket)
-        .uploadToSignedUrl(signed.path, signed.token, file, {
-          contentType: mimeType,
-          upsert: false,
-        });
-      if (error) throw error;
-      const indexed = await api<{ slideCount: number; chunkCount: number }>(`/Admin/materials/${signed.versionId}/complete-upload`, { method: "POST" });
+      await api(signed.uploadPath, { method: "PUT", headers: { "Content-Type": mimeType }, body: file });
+      const indexed = await api<{ status: string; slideCount?: number; chunkCount?: number }>(`/Admin/materials/${signed.versionId}/complete-upload`, { method: "POST" });
       formElement.reset();
-      setNotice({ tone: "success", message: `Đã trích xuất ${indexed.slideCount} slide và lập chỉ mục ${indexed.chunkCount} đoạn nội dung.` });
+      setNotice({ tone: "success", message: indexed.status === "processing" ? "Đã tải tài liệu. Hệ thống đang xử lý slide; bấm làm mới để cập nhật." : `Đã trích xuất ${indexed.slideCount} slide và lập chỉ mục ${indexed.chunkCount} đoạn nội dung.` });
     });
   };
 
@@ -307,7 +299,7 @@ export function AdminConsole() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-[20px] font-bold text-ink">Pipeline tài liệu và tạo đề</h1>
-              <p className="mt-1 text-[13px] text-ink-2">Supabase là dữ liệu chính; MongoDB lưu vector dẫn xuất.</p>
+              <p className="mt-1 text-[13px] text-ink-2">ExamcureBe quản lý tài khoản, tài liệu, câu hỏi và đề thi trên MongoDB.</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {services && Object.entries(services).map(([name, active]) => (
@@ -339,7 +331,7 @@ export function AdminConsole() {
             <UsersPanel />
             <div className="grid gap-6 xl:grid-cols-2">
               <section id="mon-hoc" className="scroll-mt-5 rounded-[12px] border border-line bg-paper p-5 shadow-[var(--shadow-1)]">
-                <SectionTitle icon={<Plus size={18} />} title="1. Khai báo môn học" subtitle="Tạo môn trong Supabase trước khi tải tài liệu." />
+                <SectionTitle icon={<Plus size={18} />} title="1. Khai báo môn học" subtitle="Tạo môn học trước khi tải tài liệu." />
                 <form onSubmit={createSubject} className="mt-5 grid gap-3 sm:grid-cols-3">
                   <Field name="schoolCode" label="Mã trường" placeholder="fptu" required />
                   <Field name="code" label="Mã môn" placeholder="CSD201" required />

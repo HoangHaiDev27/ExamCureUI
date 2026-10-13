@@ -1,230 +1,292 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const sdk = vi.hoisted(() => ({
-  configured: true,
-  auth: {
-    getSession: vi.fn(), refreshSession: vi.fn(), signOut: vi.fn(),
-    signInWithPassword: vi.fn(), signUp: vi.fn(), verifyOtp: vi.fn(),
-    resend: vi.fn(), resetPasswordForEmail: vi.fn(), updateUser: vi.fn(),
-    signInWithOAuth: vi.fn(),
-  },
-  maybeSingle: vi.fn(),
-}));
-
-vi.mock("../lib/supabase-browser", () => ({
-  isSupabaseBrowserConfigured: () => sdk.configured,
-  getSupabaseBrowserClient: () => {
-    if (!sdk.configured) throw new Error("Supabase chưa được cấu hình trên trình duyệt.");
-    const query = { select: () => query, eq: () => query, maybeSingle: sdk.maybeSingle };
-    return { auth: sdk.auth, from: () => query };
-  },
-}));
-
-const session = {
-  access_token: "supabase-access-token",
-  refresh_token: "sdk-refresh-token",
-  user: { id: "user-123", email: "student@example.com", user_metadata: { full_name: "Student", role: "admin" } },
-};
-
 function storage() {
   const values = new Map<string, string>();
   return {
-    getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => values.set(key, value),
-    removeItem: (key: string) => values.delete(key),
+    getItem: (k: string) => values.get(k) ?? null,
+    setItem: (k: string, v: string) => values.set(k, v),
+    removeItem: (k: string) => values.delete(k),
   };
 }
-
+const profile = {
+  id: "user-123",
+  fullName: "Student",
+  email: "student@example.com",
+  schoolId: "hust",
+  role: "student",
+};
 beforeEach(() => {
   vi.resetModules();
   vi.resetAllMocks();
-  sdk.configured = true;
-  vi.stubGlobal("window", { dispatchEvent: vi.fn(), location: { origin: "https://examcure.example" } });
+  vi.stubGlobal("window", {
+    dispatchEvent: vi.fn(),
+    location: { origin: "https://examcure.example", assign: vi.fn() },
+  });
   vi.stubGlobal("document", { cookie: "" });
+  vi.stubGlobal("navigator", {});
   vi.stubGlobal("localStorage", storage());
   vi.stubGlobal("sessionStorage", storage());
-  vi.stubGlobal("fetch", vi.fn());
-  sdk.auth.getSession.mockResolvedValue({ data: { session }, error: null });
-  sdk.auth.signOut.mockResolvedValue({ error: null });
-  sdk.maybeSingle.mockResolvedValue({ data: { full_name: "Student", school_id: "hust", role: "student" }, error: null });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) =>
+      url.endsWith("/Auth/logout")
+        ? new Response(null, { status: 204 })
+        : Response.json(
+            url.endsWith("/Auth/refresh")
+              ? { ...profile, token: "backend-token" }
+              : profile,
+          ),
+    ),
+  );
 });
-
 afterEach(() => vi.unstubAllGlobals());
-
-describe("Supabase authentication", () => {
-  it.each(["/quen-mat-khau", "/xac-thuc-otp", "/", "/pricing", "/schools/fptu/subjects/CSD201", "/admin/noi-dung-ai"])("keeps an admin on %s instead of forcing admin navigation", async (pathname) => {
+describe("ExamcureBe browser authentication", () => {
+  it.each([
+    "/quen-mat-khau",
+    "/xac-thuc-otp",
+    "/",
+    "/pricing",
+    "/schools/fptu/subjects/CSD201",
+    "/admin/noi-dung-ai",
+  ])("keeps admin navigation unchanged on %s", async (path) => {
     const auth = await import("../lib/auth");
-    expect(auth.adminLandingFor("admin", pathname)).toBeNull();
+    expect(auth.adminLandingFor("admin", path)).toBeNull();
   });
-
-  it("routes only the verified admin dashboard landing to admin", async () => {
+  it("only redirects a verified admin dashboard landing", async () => {
     const auth = await import("../lib/auth");
     expect(auth.adminLandingFor("Admin", "/dashboard")).toBe("/admin");
     expect(auth.adminLandingFor("student", "/dashboard")).toBeNull();
-    expect(auth.adminLandingFor(undefined, "/dashboard")).toBeNull();
   });
-
-  it("refreshes promotions and demotions without logging out the SDK session", async () => {
+  it("restores sessions using an HttpOnly cookie and reads role from the backend", async () => {
+    localStorage.setItem(
+      "examcure:supabase-auth",
+      JSON.stringify({ name: "Old Admin", role: "admin", token: "old-token" }),
+    );
     const auth = await import("../lib/auth");
+    expect(auth.getAuth()).toBeNull();
+    await auth.refreshAuthProfile();
+    expect(auth.getAuth()).toMatchObject({
+      name: "Student",
+      schoolId: "hust",
+      role: "student",
+    });
+    expect(localStorage.getItem("examcure:supabase-auth")).toBeNull();
+    expect(localStorage.getItem("examcure:profile")).not.toContain("token");
+    const calls = vi.mocked(fetch).mock.calls;
+    expect(calls[0][0]).toBe("/api/v1/Auth/refresh");
+    expect(calls[0][1]?.credentials).toBe("include");
+    expect(new Headers(calls[1][1]?.headers).get("Authorization")).toBe(
+      "Bearer backend-token",
+    );
+  });
+  it("stores neither access nor refresh tokens and clears old bootstrap credentials", async () => {
     sessionStorage.setItem("examcure:admin-bootstrap-token", "obsolete-secret");
-    auth.login({ name: "Student", role: "student" });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json({ ...profile, token: "login-token" }),
+    );
+    const auth = await import("../lib/auth");
+    await auth.loginAPI(profile.email, "password");
+    expect(await auth.getAccessToken()).toBe("login-token");
+    expect(localStorage.getItem("examcure:profile")).not.toContain("token");
     expect(sessionStorage.getItem("examcure:admin-bootstrap-token")).toBeNull();
-    sdk.maybeSingle.mockResolvedValueOnce({ data: { full_name: "Admin", role: "admin" }, error: null });
+    expect(document.cookie).toContain("examcure_role=; path=/; max-age=0");
+  });
+  it("updates promotion and demotion while retaining the session", async () => {
+    const auth = await import("../lib/auth");
+    auth.login({ name: "Student", token: "session-token", role: "student" });
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json({ ...profile, role: "admin" }),
+    );
     await auth.refreshAuthProfile();
     expect(auth.getAuth()?.role).toBe("admin");
-    expect(document.cookie).toContain("examcure_role=; path=/; max-age=0");
     await auth.refreshAuthProfile();
     expect(auth.getAuth()?.role).toBe("student");
-    expect(sdk.auth.signOut).not.toHaveBeenCalled();
-    expect(await auth.getAccessToken()).toBe(session.access_token);
+    expect(await auth.getAccessToken()).toBe("session-token");
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
-
-  it("ignores an older admin profile read after a newer demotion read", async () => {
-    let complete!: (value: unknown) => void;
-    sdk.maybeSingle.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+  it("ignores an older role read that completes after a newer demotion", async () => {
     const auth = await import("../lib/auth");
+    auth.login({ name: "Admin", token: "session-token", role: "admin" });
+    let complete!: (v: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
     const old = auth.refreshAuthProfile();
-    await vi.waitFor(() => expect(sdk.maybeSingle).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     await auth.refreshAuthProfile();
-    complete({ data: { role: "admin" }, error: null });
+    complete(Response.json({ ...profile, role: "admin" }));
     expect(await old).toBeNull();
     expect(auth.getAuth()?.role).toBe("student");
   });
-
-  it("does not restore an admin cache when a refresh completes after logout", async () => {
-    let complete!: (value: unknown) => void;
-    sdk.maybeSingle.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }));
+  it("never resurrects an admin profile that completes after logout", async () => {
     const auth = await import("../lib/auth");
+    auth.login({ name: "Admin", token: "session-token", role: "admin" });
+    let complete!: (v: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
     const pending = auth.refreshAuthProfile();
-    await vi.waitFor(() => expect(sdk.maybeSingle).toHaveBeenCalled());
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     await auth.logout();
-    complete({ data: { role: "admin" }, error: null });
+    complete(Response.json({ ...profile, role: "admin" }));
     expect(await pending).toBeNull();
     expect(auth.getAuth()).toBeNull();
   });
-
-  it("hides a stale admin profile if the database role cannot be checked", async () => {
+  it("hides cached admin data if a role check fails", async () => {
     const auth = await import("../lib/auth");
-    auth.login({ name: "Admin", role: "admin" });
-    sdk.maybeSingle.mockResolvedValue({ data: null, error: new Error("offline") });
-    await expect(auth.refreshAuthProfile()).rejects.toThrow("hồ sơ");
+    auth.login({ name: "Admin", token: "session-token", role: "admin" });
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("offline"));
+    await expect(auth.refreshAuthProfile()).rejects.toThrow("offline");
     expect(auth.getAuth()).toBeNull();
-    expect(sdk.auth.signOut).not.toHaveBeenCalled();
+    expect(await auth.getAccessToken()).toBe("session-token");
   });
-
-  it("fails explicitly when Supabase is missing instead of calling legacy auth or accepting a mock login", async () => {
-    sdk.configured = false;
+  it("treats missing cookie sessions as anonymous without a false login", async () => {
     const auth = await import("../lib/auth");
-    await expect(auth.loginAPI("student@example.com", "password")).rejects.toThrow("chưa được cấu hình");
-    await expect(auth.registerAPI("Student", "student@example.com", "password", "hust")).rejects.toThrow("chưa được cấu hình");
-    expect(fetch).not.toHaveBeenCalled();
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json({ message: "No session" }, { status: 401 }),
+    );
+    expect(await auth.refreshAuthProfile()).toBeNull();
     expect(auth.getAuth()).toBeNull();
   });
-
-  it("does not turn network errors into successful logins", async () => {
-    sdk.auth.signInWithPassword.mockRejectedValue(new TypeError("fetch failed"));
+  it("shares a single refresh between simultaneous API requests", async () => {
     const auth = await import("../lib/auth");
-    await expect(auth.loginAPI("student@example.com", "password")).rejects.toThrow("fetch failed");
+    let complete!: (v: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const first = auth.getAccessToken(true),
+      second = auth.getAccessToken(true);
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    complete(Response.json({ ...profile, token: "renewed" }));
+    expect(await Promise.all([first, second])).toEqual(["renewed", "renewed"]);
+  });
+  it("blocks calls during signout and sends no refresh credential in JSON", async () => {
+    const auth = await import("../lib/auth");
+    auth.login({ name: "Student", token: "session-token" });
+    let complete!: (v: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const pending = auth.logout();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
     expect(auth.getAuth()).toBeNull();
-  });
-
-  it("ignores legacy cache and takes role from profiles rather than editable user metadata", async () => {
-    localStorage.setItem("examcure:auth", JSON.stringify({ token: "mock-token", role: "admin" }));
-    const auth = await import("../lib/auth");
-    expect(auth.getAuth()).toBeNull();
-    const user = await auth.authUserFromSupabaseSession();
-    expect(user).toMatchObject({ id: "user-123", token: session.access_token, schoolId: "hust", role: "student" });
-    auth.login(user!);
-    expect(localStorage.getItem("examcure:auth")).toBeNull();
-    expect(localStorage.getItem("examcure:supabase-auth")).not.toContain(session.refresh_token);
-  });
-
-  it("uses the SDK token even when the display cache has an outdated token", async () => {
-    const auth = await import("../lib/auth");
-    auth.login({ name: "Student", token: "outdated-cache-token" });
-    expect(await auth.getAccessToken()).toBe(session.access_token);
-  });
-
-  it("clears stale login state when the SDK has no session", async () => {
-    const auth = await import("../lib/auth");
-    auth.login({ name: "Student", token: "cached" });
-    sdk.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
     await expect(auth.getAccessToken()).rejects.toThrow("đăng nhập");
+    expect(vi.mocked(fetch).mock.calls[0][1]?.body).toBe("{}");
+    complete(new Response(null, { status: 204 }));
+    await pending;
+    expect(localStorage.getItem("examcure:logout-pending")).toBeNull();
+  });
+  it("keeps logout pending after a network failure and retries revocation before restoring anything", async () => {
+    const auth = await import("../lib/auth");
+    auth.login({ name: "Admin", token: "session-token", role: "admin" });
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("offline"));
+    await expect(auth.logout()).rejects.toThrow("offline");
+    expect(localStorage.getItem("examcure:logout-pending")).toBe("true");
+    expect(await auth.refreshAuthProfile()).toBeNull();
+    expect(vi.mocked(fetch).mock.calls[1][0]).toBe("/api/v1/Auth/logout");
     expect(auth.getAuth()).toBeNull();
   });
-
-  it("shares a single refresh when simultaneous requests receive 401", async () => {
-    let complete!: (value: unknown) => void;
-    sdk.auth.refreshSession.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
+  it("invalidates in-memory tokens after a cross-tab session change", async () => {
     const auth = await import("../lib/auth");
-    const first = auth.getAccessToken(true);
-    const second = auth.getAccessToken(true);
-    complete({ data: { session: { ...session, access_token: "refreshed" } }, error: null });
-    expect(await Promise.all([first, second])).toEqual(["refreshed", "refreshed"]);
-    expect(sdk.auth.refreshSession).toHaveBeenCalledTimes(1);
+    auth.login({ name: "Student", token: "old-token" });
+    const sharedProfile = localStorage.getItem("examcure:profile");
+    auth.invalidateSession();
+    expect(localStorage.getItem("examcure:profile")).toBe(sharedProfile);
+    expect(await auth.getAccessToken()).toBe("backend-token");
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
-
-  it("awaits SDK logout, clears bootstrap credentials and blocks requests during sign-out", async () => {
-    let complete!: (value: unknown) => void;
-    sdk.auth.signOut.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
+  it("ignores an old profile read after logging in as another account", async () => {
     const auth = await import("../lib/auth");
-    auth.login({ name: "Student", token: "cached" });
-    sessionStorage.setItem("examcure:admin-bootstrap-token", "bootstrap");
-    const result = auth.logout();
-    expect(auth.getAuth()).toBeNull();
-    expect(sessionStorage.getItem("examcure:admin-bootstrap-token")).toBeNull();
-    await expect(auth.getAccessToken()).rejects.toThrow("đăng nhập");
-    complete({ error: null });
-    await result;
-    expect(sdk.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
-  });
-
-  it("does not resurrect a session from a profile read that completes after logout", async () => {
-    let complete!: (value: unknown) => void;
-    sdk.maybeSingle.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
-    const auth = await import("../lib/auth");
-    const pending = auth.authUserFromSupabaseSession();
-    await vi.waitFor(() => expect(sdk.maybeSingle).toHaveBeenCalled());
-    await auth.logout();
-    complete({ data: { role: "admin" }, error: null });
+    auth.login({ name: "Old Admin", token: "old-token", role: "admin" });
+    let complete!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const pending = auth.refreshAuthProfile();
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+    vi.mocked(fetch).mockResolvedValueOnce(
+      Response.json({ ...profile, token: "new-token" }),
+    );
+    await auth.loginAPI(profile.email, "password");
+    complete(
+      Response.json({ ...profile, fullName: "Old Admin", role: "admin" }),
+    );
     expect(await pending).toBeNull();
+    expect(auth.getAuth()?.role).toBe("student");
+    expect(await auth.getAccessToken()).toBe("new-token");
   });
-
-  it("completes local logout when remote revocation fails but the SDK cleared its session", async () => {
-    sdk.auth.signOut.mockResolvedValue({ error: new Error("network unavailable") });
-    sdk.auth.getSession.mockResolvedValue({ data: { session: null }, error: null });
+  it("retains a verified display profile when browser storage is unavailable", async () => {
+    vi.stubGlobal("localStorage", {
+      getItem() {
+        throw new Error("blocked");
+      },
+      setItem() {
+        throw new Error("blocked");
+      },
+      removeItem() {
+        throw new Error("blocked");
+      },
+    });
     const auth = await import("../lib/auth");
-    await expect(auth.logout()).resolves.toBeUndefined();
+    await auth.refreshAuthProfile();
+    expect(auth.getAuth()).toMatchObject({ name: "Student", role: "student" });
+    expect(await auth.getAccessToken()).toBe("backend-token");
+  });
+  it("registers for OTP verification and never creates an active session prematurely", async () => {
+    const auth = await import("../lib/auth");
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ success: true }));
+    expect(
+      (await auth.registerAPI("Student", profile.email, "password", "hust"))
+        .user,
+    ).toBeNull();
+    expect(auth.getAuth()).toBeNull();
+    expect(
+      JSON.parse(vi.mocked(fetch).mock.calls[0][1]?.body as string),
+    ).toMatchObject({ fullName: "Student", schoolId: "hust" });
+  });
+  it("never turns backend/network errors into successful logins", async () => {
+    const auth = await import("../lib/auth");
+    vi.mocked(fetch).mockRejectedValueOnce(new Error("offline"));
+    await expect(auth.loginAPI(profile.email, "password")).rejects.toThrow(
+      "offline",
+    );
     expect(auth.getAuth()).toBeNull();
   });
-
-  it("handles registrations with confirmation enabled and disabled", async () => {
+  it("resetting a password uses the backend OTP flow and leaves no recovery session", async () => {
     const auth = await import("../lib/auth");
-    sdk.auth.signUp.mockResolvedValue({ data: { session: null }, error: null });
-    expect((await auth.registerAPI("Student", "student@example.com", "password", "hust")).user).toBeNull();
-    sdk.auth.signUp.mockResolvedValue({ data: { session }, error: null });
-    expect((await auth.registerAPI("Student", "student@example.com", "password", "hust")).user).toMatchObject({ schoolId: "hust", role: "student" });
-  });
-
-  it("keeps recovery sessions out of the application and clears them even when password update fails", async () => {
-    let complete!: (value: unknown) => void;
-    sdk.auth.verifyOtp.mockResolvedValue({ data: { session }, error: null });
-    sdk.auth.updateUser.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
-    const auth = await import("../lib/auth");
-    const resetting = auth.resetPasswordWithOtpAPI("student@example.com", "123456", "new-password");
-    const rejected = expect(resetting).rejects.toThrow("weak password");
-    await vi.waitFor(() => expect(sdk.auth.updateUser).toHaveBeenCalled());
-    expect(await auth.authUserFromSupabaseSession()).toBeNull();
-    await expect(auth.getAccessToken()).rejects.toThrow("đăng nhập");
-    complete({ error: new Error("weak password") });
-    await rejected;
-    expect(sdk.auth.signOut).toHaveBeenCalledWith({ scope: "local" });
+    auth.login({ name: "Admin", role: "admin", token: "old-token" });
+    vi.mocked(fetch).mockResolvedValueOnce(Response.json({ success: true }));
+    await auth.resetPasswordWithOtpAPI(profile.email, "123456", "new-password");
     expect(auth.getAuth()).toBeNull();
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      "/api/v1/Auth/reset-password",
+    );
   });
-
-  it("rejects external OAuth destinations", async () => {
+  it("uses the backend Google redirect and rejects external destinations", async () => {
     const auth = await import("../lib/auth");
-    await expect(auth.signInWithGoogle("https://other.example/")).rejects.toThrow("không hợp lệ");
-    expect(sdk.auth.signInWithOAuth).not.toHaveBeenCalled();
+    await expect(auth.signInWithGoogle("https://evil.example")).rejects.toThrow(
+      "không hợp lệ",
+    );
+    await auth.signInWithGoogle("/dashboard");
+    const redirect = vi.mocked(window.location.assign).mock
+      .calls[0][0] as string;
+    expect(redirect).toContain("/api/v1/Auth/google/start?returnTo=");
+    expect(decodeURIComponent(redirect)).toContain(
+      "https://examcure.example/auth/callback?next=",
+    );
   });
 });

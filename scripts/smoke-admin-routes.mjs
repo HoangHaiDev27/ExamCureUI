@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
 // Run after `npm run build`. Test the actual production router without touching
-// Supabase or requiring account credentials, including obsolete role cookies.
+// external services or requiring account credentials, including obsolete role cookies.
 const reservation = createServer();
 await new Promise((resolve) => reservation.listen(0, "127.0.0.1", resolve));
 const port = reservation.address().port;
