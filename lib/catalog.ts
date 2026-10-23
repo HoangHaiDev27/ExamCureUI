@@ -33,6 +33,9 @@ export interface ExamSummary {
   questionCount: number;
   publishedAt: string | null;
   lastScore: number | null;
+  difficulty: DifficultyCode | null;
+  bestScore: number | null;
+  attemptCount: number;
 }
 export interface ExamOption {
   position: number;

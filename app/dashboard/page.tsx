@@ -54,6 +54,7 @@ import {
   listSubjectMaterials,
   listSubjects,
   listWrongAnswers,
+  subjectRouteId,
   type AttemptItem,
   type CatalogSubject,
   type DifficultyCode,
@@ -65,6 +66,7 @@ import {
   formatDate,
   groupByTerm,
   materialHref,
+  materialUnit,
   resultHref,
   selectQuickAccess,
   trendDelta,
@@ -1282,7 +1284,15 @@ function SubjectMaterialsPanel({ subject }: { subject: CatalogSubject }) {
   const res = useResource(load, true);
   return (
     <div className="space-y-4">
-      <h3 className="text-[16px] font-bold text-ink">Giáo trình & Slide bài giảng</h3>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[16px] font-bold text-ink">Giáo trình & Slide bài giảng</h3>
+        <Link
+          href={`/schools/${subject.schoolCode}/subjects/${subjectRouteId(subject.schoolCode, subject.code)}`}
+          className="text-[13px] font-semibold text-orange hover:text-orange-dark"
+        >
+          Mở trang môn học
+        </Link>
+      </div>
       {res.error && !res.data ? (
         <div className="rounded-[10px] border border-line bg-paper"><SectionError message={res.error} onRetry={res.reload} /></div>
       ) : res.loading ? (
@@ -1301,7 +1311,7 @@ function SubjectMaterialsPanel({ subject }: { subject: CatalogSubject }) {
                   <h4 className="text-[15px] font-bold text-ink">{m.title}</h4>
                   {m.description && <p className="mt-1 text-[12.5px] text-ink-2">{m.description}</p>}
                   <p className="mt-1 text-[12.5px] text-ink-3">
-                    <span className="block">{m.version.slide_count} slide · {formatFileSize(m.version.size_bytes)} · Cập nhật {formatDate(m.version.processed_at || m.createdAt)}</span>
+                    <span className="block">{m.version.slide_count} {materialUnit(m.version.original_filename)} · {formatFileSize(m.version.size_bytes)} · Cập nhật {formatDate(m.version.processed_at || m.createdAt)}</span>
                     <span className="mt-0.5 block font-semibold text-orange">{fileTypeLabel(m.version.original_filename)}</span>
                   </p>
                 </div>
