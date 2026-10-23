@@ -76,6 +76,7 @@ function AiChatbotPanel() {
   const userKey = user?.id ?? user?.email ?? null;
 
   const cancelInflight = useCallback((restore: boolean) => {
+    epoch.current++;
     controller.current?.abort();
     controller.current = null;
     const waiting = pending.current;
@@ -102,20 +103,26 @@ function AiChatbotPanel() {
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [isOpen, cancelInflight]);
 
-  // Lazily load usage and the subject list the first time the panel opens for a user.
+  // Refresh the quota every time the panel opens (a closed in-flight question still counts).
   useEffect(() => {
-    if (!isOpen || !userKey || loadedFor.current === userKey) return;
+    if (!isOpen || !userKey) return;
     const abort = new AbortController();
     getAssistantUsage(abort.signal)
-      .then((u) => {
+      .then((u) => setUsage({ available: u.available, remaining: u.remainingToday }))
+      .catch(() => undefined);
+    return () => abort.abort();
+  }, [isOpen, userKey]);
+
+  // Lazily load the subject list the first time the panel opens for a user.
+  useEffect(() => {
+    if (!isOpen || !userKey || !user?.schoolId || loadedFor.current === userKey) return;
+    const abort = new AbortController();
+    listSubjects(user.schoolId, { signal: abort.signal })
+      .then((list) => {
         loadedFor.current = userKey;
-        setUsage({ available: u.available, remaining: u.remainingToday });
+        setSubjects((current) => mergeSubjects(list, current));
       })
       .catch(() => undefined);
-    if (user?.schoolId)
-      listSubjects(user.schoolId, { signal: abort.signal })
-        .then((list) => setSubjects((current) => mergeSubjects(list, current)))
-        .catch(() => undefined);
     return () => abort.abort();
   }, [isOpen, userKey, user?.schoolId]);
 
@@ -162,8 +169,11 @@ function AiChatbotPanel() {
     const asked = selected;
     askAssistant({ ...(asked ? { subjectId: asked.id } : {}), messages: history }, abort.signal)
       .then((reply) => {
-        if (epoch.current !== myEpoch) return;
+        if (epoch.current !== myEpoch || abort.signal.aborted) return;
+        if (!reply || typeof reply.answer !== "string") throw new Error("malformed assistant reply");
         pending.current = null;
+        const sources = Array.isArray(reply.sources) ? reply.sources : [];
+        const remaining = typeof reply.remainingToday === "number" ? reply.remainingToday : null;
         setMessages((current) => [
           ...current,
           {
@@ -171,12 +181,12 @@ function AiChatbotPanel() {
             role: "assistant",
             kind: "normal",
             content: reply.answer,
-            sources: reply.sources,
-            subject: reply.subject,
+            sources,
+            subject: reply.subject ?? null,
             generalNote: Boolean(asked) && !reply.grounded,
           },
         ]);
-        setUsage((current) => ({ available: current?.available ?? true, remaining: reply.remainingToday }));
+        if (remaining !== null) setUsage((current) => ({ available: current?.available ?? true, remaining }));
         setIsThinking(false);
       })
       .catch((error: unknown) => {
