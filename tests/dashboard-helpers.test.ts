@@ -5,6 +5,7 @@ import {
   examHref,
   fileTypeLabel,
   materialUnit,
+  materialBodyText,
   formatDate,
   groupByTerm,
   materialHref,
@@ -85,6 +86,12 @@ describe("dedupeMaterials", () => {
 });
 
 describe("misc helpers", () => {
+  it("materialBodyText keeps content and only falls back when empty", () => {
+    expect(materialBodyText("Nội dung", "a.docx")).toBe("Nội dung");
+    expect(materialBodyText("Nội dung", "a.pptx")).toBe("Nội dung");
+    expect(materialBodyText("", "a.docx")).toBe("Phần này không có text để hiển thị.");
+    expect(materialBodyText("", "a.pptx")).toBe("Slide này không có text để hiển thị.");
+  });
   it("materialUnit", () => {
     expect(materialUnit("a.DOCX")).toBe("phần");
     expect(materialUnit("a.pptx")).toBe("slide");

@@ -82,6 +82,11 @@ export function materialUnit(filename: string): "slide" | "phần" {
   return filename.toLowerCase().endsWith(".docx") ? "phần" : "slide";
 }
 
+/** Slide/section body, or the empty-state placeholder when it has no text. */
+export function materialBodyText(text: string, filename: string): string {
+  return text || `${materialUnit(filename) === "phần" ? "Phần" : "Slide"} này không có text để hiển thị.`;
+}
+
 export function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
