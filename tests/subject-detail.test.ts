@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { examRow, examStartHref, termsLabel } from "../lib/subject-detail";
+import { examRow, examStartHref, lookupSubject, termsLabel } from "../lib/subject-detail";
 
 const base = { id: "e1", title: "Đề 1", durationMinutes: 45, questionCount: 30 };
 
 describe("subject detail helpers", () => {
+  it("lookupSubject returns a sentinel instead of null", () => {
+    expect(lookupSubject([])).toEqual({ kind: "missing" });
+    expect(lookupSubject(undefined)).toEqual({ kind: "missing" });
+    expect(lookupSubject([{ id: "s" }, { id: "t" }])).toEqual({ kind: "ok", subject: { id: "s" } });
+  });
   it("termsLabel", () => {
     expect(termsLabel([2, 1])).toBe("Kỳ 1, 2");
     expect(termsLabel([3, 3])).toBe("Kỳ 3");

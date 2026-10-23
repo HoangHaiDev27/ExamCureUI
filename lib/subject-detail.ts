@@ -12,6 +12,14 @@ export function examStartHref(schoolCode: string, subjectCode: string, examId: s
   return `${examHref(schoolCode, subjectCode)}?exam=${encodeURIComponent(examId)}`;
 }
 
+export type SubjectLookup<T> = { kind: "ok"; subject: T } | { kind: "missing" };
+
+/** First match as a non-null result, so "not found" is not mistaken for "still loading". */
+export function lookupSubject<T>(matches: readonly T[] | null | undefined): SubjectLookup<T> {
+  const subject = matches?.[0];
+  return subject === undefined ? { kind: "missing" } : { kind: "ok", subject };
+}
+
 export interface ExamRowView {
   id: string;
   index: number;

@@ -14,6 +14,7 @@ import {
   type ExamDetail,
   type ExamSummary,
 } from "@/lib/catalog";
+import { lookupSubject, type SubjectLookup } from "@/lib/subject-detail";
 import { toRoomQuestions } from "@/lib/exam-helpers";
 import { useResource } from "@/lib/useResource";
 import type { School } from "@/lib/types";
@@ -42,14 +43,14 @@ export function ExamLoader({ school, routeId, examId }: { school: School; routeI
 function SubjectStage({ school, routeId, examId, student }: { school: School; routeId: string; examId?: string; student: Student }) {
   const code = codeFromRouteId(school.id, routeId);
   const load = useCallback(
-    async (signal: AbortSignal): Promise<CatalogSubject | null> =>
-      code ? ((await listSubjects(school.id, { code, signal }))[0] ?? null) : null,
+    async (signal: AbortSignal): Promise<SubjectLookup<CatalogSubject>> =>
+      code ? lookupSubject(await listSubjects(school.id, { code, signal })) : { kind: "missing" },
     [school.id, code],
   );
   const res = useResource(load, true);
   if (res.error && res.data === null) return <ErrorCard message={res.error} onRetry={res.reload} />;
-  if (res.loading) return <LoadingCard label="Đang tải môn học…" />;
-  if (!res.data)
+  if (res.loading || !res.data) return <LoadingCard label="Đang tải môn học…" />;
+  if (res.data.kind === "missing")
     return (
       <StatusCard
         title="Không tìm thấy môn học"
@@ -57,8 +58,8 @@ function SubjectStage({ school, routeId, examId, student }: { school: School; ro
       />
     );
   return examId
-    ? <ExamStage key={`${student.id}:${examId}`} school={school} subject={res.data} examId={examId} student={student} />
-    : <ExamListStage school={school} subject={res.data} student={student} />;
+    ? <ExamStage key={`${student.id}:${examId}`} school={school} subject={res.data.subject} examId={examId} student={student} />
+    : <ExamListStage school={school} subject={res.data.subject} student={student} />;
 }
 
 function ExamListStage({ school, subject, student }: { school: School; subject: CatalogSubject; student: Student }) {

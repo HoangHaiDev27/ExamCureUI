@@ -20,7 +20,7 @@ import {
 } from "@/lib/catalog";
 import { classify, TONE_COLOR } from "@/lib/grade";
 import { examHref, materialHref, materialUnit } from "@/lib/dashboard-helpers";
-import { examRow, examStartHref, termsLabel, type ExamRowView } from "@/lib/subject-detail";
+import { examRow, examStartHref, lookupSubject, termsLabel, type ExamRowView } from "@/lib/subject-detail";
 import { useResource } from "@/lib/useResource";
 import type { School } from "@/lib/types";
 import { primaryAction } from "./exam/status";
@@ -31,7 +31,7 @@ const DIFF_STYLE: Record<DifficultyCode, string> = {
   advanced: "border-orange-border text-orange-dark bg-orange-soft",
 };
 
-type Loaded = { subject: CatalogSubject; exams: ExamSummary[]; materials: SubjectMaterial[] } | null;
+type Loaded = { kind: "missing" } | { kind: "ok"; subject: CatalogSubject; exams: ExamSummary[]; materials: SubjectMaterial[] };
 
 export function SubjectDetail({ school, routeId }: { school: School; routeId: string }) {
   const user = useAuth();
@@ -39,6 +39,7 @@ export function SubjectDetail({ school, routeId }: { school: School; routeId: st
   const { openAuth } = useAuthModal();
   const router = useRouter();
   const code = codeFromRouteId(school.id, routeId);
+  const userId = user?.id ?? user?.email ?? "";
 
   // Redirect if logged-in user belongs to another school
   useEffect(() => {
@@ -49,18 +50,22 @@ export function SubjectDetail({ school, routeId }: { school: School; routeId: st
 
   const load = useCallback(
     async (signal: AbortSignal): Promise<Loaded> => {
-      if (!code) return null;
-      const subject = (await listSubjects(school.id, { code, signal }))[0];
-      if (!subject) return null;
+      void userId;
+      if (!code) return { kind: "missing" };
+      const found = lookupSubject(await listSubjects(school.id, { code, signal }));
+      if (found.kind === "missing") return found;
+      const subject = found.subject;
       const [exams, materials] = await Promise.all([
         listSubjectExams(subject.id, signal),
         listSubjectMaterials(school.id, subject.code, signal),
       ]);
-      return { subject, exams, materials };
+      return { kind: "ok", subject, exams, materials };
     },
-    [school.id, code],
+    // userId keys the cache so one account never sees another account's scores
+    [school.id, code, userId],
   );
-  const res = useResource(load, Boolean(user));
+  const sameSchool = !user?.schoolId || user.schoolId === school.id;
+  const res = useResource(load, Boolean(user) && sameSchool);
 
   if (!user)
     return (
@@ -91,13 +96,13 @@ export function SubjectDetail({ school, routeId }: { school: School; routeId: st
         </Notice>
       </Shell>
     );
-  if (res.loading || (res.data === null && !res.error && code))
+  if (res.loading || (!res.data && !res.error))
     return (
       <Shell school={school} label={code?.toUpperCase() ?? routeId}>
         <Notice title="Đang tải môn học…" />
       </Shell>
     );
-  if (!res.data)
+  if (res.data?.kind !== "ok")
     return (
       <Shell school={school} label={code?.toUpperCase() ?? routeId}>
         <Notice
@@ -112,7 +117,7 @@ export function SubjectDetail({ school, routeId }: { school: School; routeId: st
 function Shell({ school, label, children }: { school: School; label: string; children: ReactNode }) {
   return (
     <main className="mx-auto max-w-[1180px] px-5 pb-20 lg:px-8">
-      <nav className="flex flex-wrap items-center gap-1.5 py-5 text-[13px] text-ink-3">
+      <nav aria-label="Đường dẫn" className="flex flex-wrap items-center gap-1.5 py-5 text-[13px] text-ink-3">
         <Link href="/" className="hover:text-ink">Trang chủ</Link>
         <ChevronRight size={14} />
         <Link href="/schools" className="hover:text-ink">Chọn trường</Link>
@@ -149,7 +154,7 @@ function Notice({
   );
 }
 
-function Content({ school, data }: { school: School; data: NonNullable<Loaded> }) {
+function Content({ school, data }: { school: School; data: Extract<Loaded, { kind: "ok" }> }) {
   const { subject, exams, materials } = data;
   const grade = subject.lastScore != null ? classify(subject.lastScore) : null;
   const diff = difficultyLabel(subject.difficulty);
@@ -216,7 +221,7 @@ function Content({ school, data }: { school: School; data: NonNullable<Loaded> }
                 <Play size={16} fill="currentColor" /> Vào thi ngay
               </Link>
             ) : (
-              <span className="inline-flex h-11 items-center justify-center rounded-[8px] border border-line bg-paper-2 px-5 text-[14px] font-medium text-ink-3" aria-disabled="true">
+              <span className="inline-flex h-11 items-center justify-center rounded-[8px] border border-line bg-paper-2 px-5 text-[14px] font-medium text-ink-3">
                 Chưa có đề
               </span>
             )}
