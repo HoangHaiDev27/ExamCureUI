@@ -2,8 +2,9 @@
 
 import { useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { FileChartColumn, Upload, X } from "lucide-react";
+import { FileChartColumn, FileText, Upload, X } from "lucide-react";
 import { formatSizeMB, subjectCode, uploadMaterial } from "@/lib/admin";
+import { materialUnit } from "@/lib/dashboard-helpers";
 import { useAdminData, useToast } from "../AdminData";
 import { Combobox, DialogFooter, Sheet } from "../overlays";
 import { Button, Field, IconButton, INPUT, TEXTAREA, cx } from "../ui";
@@ -13,7 +14,7 @@ const MAX_BYTES = 20 * 1024 * 1024;
 function fileProblem(file: File): string {
   const dot = file.name.lastIndexOf(".");
   const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : "";
-  if (ext !== ".pptx") return ext ? `Không nhận tệp ${ext}, chỉ nhận .pptx` : "Không nhận tệp này, chỉ nhận .pptx";
+  if (ext !== ".pptx" && ext !== ".docx") return ext ? `Không nhận tệp ${ext}, chỉ nhận .pptx hoặc .docx` : "Không nhận tệp này, chỉ nhận .pptx hoặc .docx";
   if (file.size > MAX_BYTES) return `Quá 20 MB (tệp nặng ${formatSizeMB(file.size)})`;
   return "";
 }
@@ -53,7 +54,7 @@ function UploadForm({ onClose, busy, setBusy }: { onClose: () => void; busy: boo
     event.preventDefault();
     if (busy) return;
     const titleValue = title.trim();
-    const fileMessage = !file ? "Chọn một tệp .pptx" : problem ? "Bỏ tệp này và chọn tệp .pptx dưới 20 MB" : "";
+    const fileMessage = !file ? "Chọn một tệp .pptx hoặc .docx" : problem ? "Bỏ tệp này và chọn tệp .pptx hoặc .docx dưới 20 MB" : "";
     setErrors({
       ...(subjectId ? {} : { subject: "Chọn môn của tài liệu" }),
       ...(titleValue ? {} : { title: "Nhập tên tài liệu" }),
@@ -77,8 +78,8 @@ function UploadForm({ onClose, busy, setBusy }: { onClose: () => void; busy: boo
         title: "Đã tải tài liệu lên",
         detail:
           result.status === "ready" && result.slideCount != null
-            ? `${result.slideCount} slide sẵn sàng làm nguồn cho AI`
-            : "Hệ thống đang trích xuất slide",
+            ? `${result.slideCount} ${materialUnit(file.name)} sẵn sàng làm nguồn cho AI`
+            : "Hệ thống đang trích xuất nội dung",
       });
       if (pathname !== "/admin/tai-lieu") router.push("/admin/tai-lieu");
       await reload();
@@ -129,10 +130,10 @@ function UploadForm({ onClose, busy, setBusy }: { onClose: () => void; busy: boo
           )}
         </Field>
         <Field label="Mô tả" htmlFor="u-desc" optional>
-          <textarea id="u-desc" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} className={TEXTAREA} placeholder="Slide bài giảng tuần 5–6" />
+          <textarea id="u-desc" rows={3} value={description} onChange={(event) => setDescription(event.target.value)} className={TEXTAREA} placeholder="Nội dung, phạm vi hoặc tuần học của tài liệu" />
         </Field>
         <div>
-          <p className="text-sm font-medium" id="u-file-label">Tệp PowerPoint</p>
+          <p className="text-sm font-medium" id="u-file-label">Tệp PowerPoint hoặc Word</p>
           <label
             onDragEnter={(event) => {
               event.preventDefault();
@@ -155,13 +156,13 @@ function UploadForm({ onClose, busy, setBusy }: { onClose: () => void; busy: boo
             <input
               ref={inputRef}
               type="file"
-              accept=".pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+              accept=".pptx,.docx,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               className="sr-only"
               aria-labelledby="u-file-label"
               onChange={(event) => pick(event.target.files?.[0] ?? null)}
             />
             <p className="text-sm font-medium text-ink [@media(hover:none)]:hidden">{dragging ? "Thả tệp để tải lên" : "Kéo thả tệp vào đây"}</p>
-            <p className="mt-1 text-sm text-pretty text-ink-3">Chỉ nhận .pptx, tối đa 20 MB</p>
+            <p className="mt-1 text-sm text-pretty text-ink-3">Nhận .pptx hoặc .docx, tối đa 20 MB</p>
             <span className="mt-4 inline-flex h-9 items-center gap-2 rounded-lg border border-line-strong bg-paper px-3 text-sm font-medium">
               <Upload aria-hidden="true" className="size-4" />
               Chọn tệp
@@ -170,7 +171,7 @@ function UploadForm({ onClose, busy, setBusy }: { onClose: () => void; busy: boo
           {file && (
             <ul className="mt-2">
               <li className="flex items-center gap-3 py-3">
-                <FileChartColumn aria-hidden="true" className="size-5 shrink-0 text-ink-3" />
+                {file.name.toLowerCase().endsWith(".docx") ? <FileText aria-hidden="true" className="size-5 shrink-0 text-ink-3" /> : <FileChartColumn aria-hidden="true" className="size-5 shrink-0 text-ink-3" />}
                 <div className="min-w-0 flex-1">
                   <p className="flex min-w-0 text-sm font-medium" title={name.length > 40 ? name : undefined}>
                     <span className="truncate">{head}</span>
@@ -204,8 +205,8 @@ export function UploadSheet({ open, onClose }: { open: boolean; onClose: () => v
     <Sheet
       open={open}
       onClose={onClose}
-      title="Tải PowerPoint lên"
-      description="Hệ thống trích chữ và ghi chú trên từng slide, rồi lập chỉ mục để AI soạn đề bám đúng nội dung môn."
+      title="Tải tài liệu lên"
+      description="Hệ thống trích chữ trên từng slide hoặc từng phần của tài liệu Word, rồi lập chỉ mục để AI soạn đề bám đúng nội dung môn."
       footer={
         <DialogFooter sticky>
           <Button variant="secondary" onClick={onClose} className="min-h-11 md:min-h-10">Huỷ</Button>

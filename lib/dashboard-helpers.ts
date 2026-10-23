@@ -77,6 +77,11 @@ export function fileTypeLabel(filename: string): string {
     : "FILE";
 }
 
+/** Unit label for extracted material rows: Word documents are split into sections. */
+export function materialUnit(filename: string): "slide" | "phần" {
+  return filename.toLowerCase().endsWith(".docx") ? "phần" : "slide";
+}
+
 export function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";

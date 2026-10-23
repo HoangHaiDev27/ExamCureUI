@@ -84,6 +84,19 @@ describe("admin fetchers", () => {
     expect(c3.url).toBe(`${base}/Admin/materials/v1/complete-upload`);
     expect(c3.init.method).toBe("POST");
   });
+  it("uploadMaterial sends docx name and mime", async () => {
+    const file = new File(["DOCXDATA"], "bai.docx", { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+    reply({ materialId: "m", versionId: "v2", versionNumber: 1, uploadPath: "/Admin/materials/v2/file" }, 201);
+    reply({ versionId: "v2", status: "uploaded" });
+    reply({ versionId: "v2", status: "ready", slideCount: 2, chunkCount: 2 });
+    await a.uploadMaterial({ subjectId: "s", title: "Bài 2", file });
+    expect(JSON.parse(call(0).init.body as string)).toMatchObject({
+      fileName: "bai.docx",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      sizeBytes: file.size,
+    });
+    expect(call(1).init.body).toBe(file);
+  });
   it("generateExam, getExam, reviewQuestion, publishExam", async () => {
     const body = { subjectId: "s", title: "T", durationMinutes: 30, questionCount: 5, difficulty: "basic" as const };
     reply({ examId: "e", status: "generating", source: "ai" }, 202);

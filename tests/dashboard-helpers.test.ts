@@ -4,6 +4,7 @@ import {
   dedupeMaterials,
   examHref,
   fileTypeLabel,
+  materialUnit,
   formatDate,
   groupByTerm,
   materialHref,
@@ -84,6 +85,11 @@ describe("dedupeMaterials", () => {
 });
 
 describe("misc helpers", () => {
+  it("materialUnit", () => {
+    expect(materialUnit("a.DOCX")).toBe("phần");
+    expect(materialUnit("a.pptx")).toBe("slide");
+    expect(materialUnit("f")).toBe("slide");
+  });
   it("fileTypeLabel", () => {
     expect(fileTypeLabel("Slide.final.pptx")).toBe("PPTX");
     expect(fileTypeLabel("noext")).toBe("FILE");

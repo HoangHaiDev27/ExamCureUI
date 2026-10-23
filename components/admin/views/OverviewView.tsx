@@ -14,10 +14,11 @@ const SERVICE_LABELS: Array<[string, string]> = [
   ["storage", "Lưu trữ tệp S3"],
   ["openai", "OpenAI"],
   ["pptxTextExtraction", "Trích text PPTX"],
+  ["docxTextExtraction", "Trích text DOCX"],
   ["converter", "Chuyển đổi tệp"],
 ];
 const SERVICE_MISSING_NOTE: Record<string, string> = {
-  converter: "Chỉ nhận tệp .pptx",
+  converter: "Chỉ trích text .pptx và .docx",
   openai: "Chưa tạo được đề bằng AI",
 };
 
@@ -52,8 +53,8 @@ function Onboarding({ onAddSubject }: { onAddSubject: () => void }) {
       action: <Button variant="primary" icon={Plus} onClick={onAddSubject}>Thêm môn học</Button>,
     },
     {
-      title: "Tải PowerPoint lên (nên làm)",
-      why: "Thêm môn học trước. Có tài liệu thì AI soạn câu hỏi bám đúng nội dung môn và ghi nguồn slide; không có thì AI tự soạn theo kiến thức chung.",
+      title: "Tải tài liệu lên (nên làm)",
+      why: "Thêm môn học trước. Có tài liệu thì AI soạn câu hỏi bám đúng nội dung môn và ghi nguồn slide/phần; không có thì AI tự soạn theo kiến thức chung.",
     },
     { title: "Tạo đề bằng AI", why: "Thêm môn học trước. AI soạn câu hỏi, đáp án và lời giải, rồi lưu đề ở trạng thái nháp." },
     { title: "Kiểm và xuất bản đề", why: "Đề chỉ đến tay sinh viên sau khi bạn kiểm từng câu và bấm xuất bản." },
@@ -179,7 +180,7 @@ function Dashboard({ overview, services }: { overview: AdminOverview; services: 
                             ) : (
                               <p className="mt-1 flex items-center gap-1.5 text-xs text-ink-3">
                                 <Spinner className="size-3.5" />
-                                Đang trích xuất slide · {subject && <Code>{subjectCode(subject)}</Code>}
+                                Đang trích xuất nội dung · {subject && <Code>{subjectCode(subject)}</Code>}
                               </p>
                             )}
                           </div>

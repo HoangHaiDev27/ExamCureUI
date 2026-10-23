@@ -64,12 +64,12 @@ function SourcesBlock({ question }: { question: AdminQuestion }) {
     <details className="group mt-3">
       <summary className="inline-flex h-8 cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-ink/70 outline-hidden hover:text-ink focus-visible:ring-2 focus-visible:ring-orange/30 [&::-webkit-details-marker]:hidden">
         <ChevronRight aria-hidden="true" className="size-4 transition-transform duration-200 group-open:rotate-90" />
-        Nguồn: slide {question.sources.map((s) => s.slide_number).join(", ")}
+        Nguồn: slide/phần {question.sources.map((s) => s.slide_number).join(", ")}
       </summary>
       <div className="mt-1 flex flex-col gap-2">
         {question.sources.map((s, i) => (
           <blockquote key={i} className="rounded-xl bg-paper-2 px-3 py-2.5 text-sm text-pretty">
-            <p className="text-xs font-medium text-ink-3">Slide {s.slide_number}</p>
+            <p className="text-xs font-medium text-ink-3">Slide/phần {s.slide_number}</p>
             <p className="mt-0.5 text-ink/80">{s.excerpt}</p>
           </blockquote>
         ))}
@@ -313,7 +313,7 @@ export function ExamDetailView({ examId }: { examId: string }) {
           <Sparkles aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-amber-700" />
           <div>
             <p className="font-medium">AI tự soạn theo kiến thức chung</p>
-            <p className="mt-0.5">Lúc tạo đề, {code} chưa có tài liệu nào đã lập chỉ mục, nên các câu không có trích dẫn slide. Kiểm kỹ đáp án và lời giải trước khi xuất bản.</p>
+            <p className="mt-0.5">Lúc tạo đề, {code} chưa có tài liệu nào đã lập chỉ mục, nên các câu không có trích dẫn nguồn. Kiểm kỹ đáp án và lời giải trước khi xuất bản.</p>
           </div>
         </div>
       ) : (

@@ -23,6 +23,7 @@ import {
 import type { Difficulty, School, Subject } from "@/lib/types";
 import type { ExamSet, Material, MaterialType } from "@/lib/materials";
 import { classify, TONE_COLOR } from "@/lib/grade";
+import { materialUnit } from "@/lib/dashboard-helpers";
 
 const DIFF_STYLE: Record<Difficulty, string> = {
   "Cơ bản": "border-green text-green bg-green-soft",
@@ -77,7 +78,7 @@ export function SubjectDetail({
           id: entry.version.id,
           type: "slide",
           title: entry.title,
-          meta: `${entry.version.slide_count} slide`,
+          meta: `${entry.version.slide_count} ${materialUnit(entry.version.original_filename)}`,
           updated: new Date(entry.version.processed_at || entry.createdAt).toLocaleDateString("vi-VN"),
           source: entry.version.original_filename,
         })));

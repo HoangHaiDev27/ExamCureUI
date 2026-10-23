@@ -12,6 +12,7 @@ import {
   type AdminOverview,
   type MaterialStatusGroup,
 } from "@/lib/admin";
+import { materialUnit } from "@/lib/dashboard-helpers";
 import { UploadSheet } from "../forms/UploadSheet";
 import { Badge, Button, EmptyLine, SearchBox, TD, TH, TableCard, Tabs, Toolbar, cx, nf } from "../ui";
 import { Code, ViewGate, clip } from "./common";
@@ -56,7 +57,7 @@ function MaterialsTable({ overview, onUpload }: { overview: AdminOverview; onUpl
     .filter((r) => !needle || `${r.material.title} ${r.version.original_filename} ${r.code}`.toLocaleLowerCase("vi").includes(needle));
 
   let empty;
-  if (!materials.length) empty = <EmptyLine>Chưa có tài liệu nào. Tải PowerPoint lên để AI soạn đề bám đúng nội dung môn.</EmptyLine>;
+  if (!materials.length) empty = <EmptyLine>Chưa có tài liệu nào. Tải tài liệu (PowerPoint hoặc Word) lên để AI soạn đề bám đúng nội dung môn.</EmptyLine>;
   else if (needle)
     empty = (
       <EmptyLine>
@@ -76,7 +77,7 @@ function MaterialsTable({ overview, onUpload }: { overview: AdminOverview; onUpl
         middle={<SearchBox value={query} onChange={setQuery} placeholder="Tìm theo tên tài liệu hoặc mã môn" />}
         action={
           <Button variant="primary" icon={Upload} onClick={onUpload} disabled={noSubject} title={noSubject ? "Thêm môn học trước" : undefined}>
-            Tải PowerPoint lên
+            Tải tài liệu lên
           </Button>
         }
       />
@@ -89,7 +90,7 @@ function MaterialsTable({ overview, onUpload }: { overview: AdminOverview; onUpl
                   <th className={TH}>Tài liệu</th>
                   <th className={cx(TH, "w-28")}>Môn</th>
                   <th className={cx(TH, "hidden w-24 @3xl:table-cell")}>Phiên bản</th>
-                  <th className={cx(TH, "w-20 text-right")}>Slide</th>
+                  <th className={cx(TH, "w-24 text-right")}>Slide/Phần</th>
                   <th className={cx(TH, "w-36")}>Trạng thái</th>
                   <th className={cx(TH, "hidden w-36 @4xl:table-cell")}>Tải lên</th>
                 </tr>
@@ -121,7 +122,7 @@ function MaterialsTable({ overview, onUpload }: { overview: AdminOverview; onUpl
                   {version.status === "failed" && <p className="mt-0.5 text-xs text-pretty text-red-600">{version.error_message}</p>}
                   <div className="mt-2 flex items-center justify-between gap-3">
                     <VersionBadge version={version} />
-                    <span className="text-xs tabular-nums text-ink-3"><Code>{code}</Code> · {version.slide_count ? `${version.slide_count} slide` : "—"}</span>
+                    <span className="text-xs tabular-nums text-ink-3"><Code>{code}</Code> · {version.slide_count ? `${version.slide_count} ${materialUnit(version.original_filename)}` : "—"}</span>
                   </div>
                 </li>
               ))}

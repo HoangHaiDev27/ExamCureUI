@@ -4,6 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 import { DIFFICULTY_LABEL, generateExam, readyVersionsOf, subjectCode, type Difficulty } from "@/lib/admin";
+import { materialUnit } from "@/lib/dashboard-helpers";
 import { useAdminData, useToast } from "../AdminData";
 import { Combobox, DialogFooter, Sheet } from "../overlays";
 import { Button, Checkbox, Field, INPUT, Radio, TEXTAREA, cx } from "../ui";
@@ -153,7 +154,7 @@ function AiExamSheetInner({ open, onClose, onCreated }: { open: boolean; onClose
                           label={
                             <>
                               <span className="block text-sm font-medium text-pretty">{material.title}</span>
-                              <span className="mt-0.5 block text-xs tabular-nums text-ink-3">v{version.version_number} · {version.slide_count} slide</span>
+                              <span className="mt-0.5 block text-xs tabular-nums text-ink-3">v{version.version_number} · {version.slide_count} {materialUnit(version.original_filename)}</span>
                             </>
                           }
                           className="items-start"
@@ -169,7 +170,7 @@ function AiExamSheetInner({ open, onClose, onCreated }: { open: boolean; onClose
                   <div>
                     <p className="font-medium">AI sẽ tự soạn theo kiến thức chung</p>
                     <p className="mt-0.5">
-                      {subjectCode(subject)} chưa có tài liệu nào đã lập chỉ mục{pending ? ` (${pending} tài liệu đang xử lý hoặc lỗi)` : ""}, nên câu hỏi sẽ không có trích dẫn slide. Bạn kiểm kỹ từng câu trước khi xuất bản.
+                      {subjectCode(subject)} chưa có tài liệu nào đã lập chỉ mục{pending ? ` (${pending} tài liệu đang xử lý hoặc lỗi)` : ""}, nên câu hỏi sẽ không có trích dẫn nguồn. Bạn kiểm kỹ từng câu trước khi xuất bản.
                     </p>
                   </div>
                 </div>
