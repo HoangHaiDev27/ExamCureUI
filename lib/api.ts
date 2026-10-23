@@ -1,7 +1,7 @@
 import { API_BASE_URL, clearAuthCache, getAccessToken, refreshAuthProfile } from "./auth";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message); }
+  constructor(public status: number, message: string, public code?: string) { super(message); }
 }
 
 type ApiOptions = { authenticated?: boolean; token?: string };
@@ -40,7 +40,11 @@ export async function apiRequest<T>(
   }
   if (!response.ok) {
     const message = data?.message || data?.error;
-    throw new ApiError(response.status, Array.isArray(message) ? message.join(" · ") : message || `Yêu cầu thất bại (${response.status}).`);
+    throw new ApiError(
+      response.status,
+      Array.isArray(message) ? message.join(" · ") : message || `Yêu cầu thất bại (${response.status}).`,
+      typeof data?.code === "string" ? data.code : undefined,
+    );
   }
   return data as T;
 }
